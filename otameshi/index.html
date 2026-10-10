@@ -466,6 +466,7 @@ function hintPanel(){
   const body=el('div','hbody');const btn=el('button','hbtn','ヒントを みる');btn.type='button';btn.id='hint-btn';
   head.appendChild(btn);p.append(head,body);
   p.open=()=>{p.classList.add('open');btn.hidden=true};
+  p.close=()=>{p.classList.remove('open');btn.hidden=false};
   p.set=(...nodes)=>{body.innerHTML='';nodes.forEach(n=>body.appendChild(n))};
   p.frames=()=>body.querySelector('.frames');
   btn.onclick=p.open;
@@ -609,22 +610,21 @@ function qMake(){
     if(tFirst)f.append(tf,gf);else f.append(gf,tf);
     HP.set(f);
   };
-  HP.open();
   draw([[T,'r']],[[G,'b']]);
   slotNow(g,0);
-  setQ(`あかい まるの ${T}は、あと いくつで 10？`,`${a} たす ${b}。 あかい まるの ${T}は、あと いくつで 10に なる`,'make1');
+  setQ(`あかい ${T}は、あと いくつで 10？`,`${a} たす ${b}。 あかい ${T}は、あと いくつで 10に なる`,'make1');
   ask(need,0,10,`10まで あと ${need}だね！`,m=>{total+=m;step2()},{
     hint:m=>{draw([[T,'r']],[[G,'b']],{hintEmpty:true});m.textContent='あかい まるの わくの、きいろい へやを かぞえてね'},
     reveal:()=>{slotSet(g,0,need);draw([[T,'r'],[need,'b']],[[rest,'b']],{pop:'b'})}});
   function step2(){
-    slotNow(g,1);
-    setQ(`あおい まるを ${need}こ うつしたよ。 あおは いくつ のこってる？`,'','make2');
+    HP.close();slotNow(g,1);
+    setQ(`あおい ${G}を、${need}と □に わけるよ。 □は いくつ？`,`あおい ${G}を、${need}と なにに わけるよ。 なには いくつ`,'make2');
     ask(rest,0,10,`${G}は ${need}と ${rest}に わかれたね！`,m=>{total+=m;step3()},{
-      hint:m=>{m.textContent='うつした あと、10に ならなかった ほうの わくの あおい まるを かぞえてね'},
+      hint:m=>{m.textContent='あおい まるを '+need+'こ うつしたよ。 のこった あおい まるを かぞえてね'},
       reveal:()=>slotSet(g,1,rest)});
   }
   function step3(){
-    setQ(`10と ${rest}で、ぜんぶで いくつ？`,'','make3');
+    HP.close();setQ(`10と ${rest}で、ぜんぶで いくつ？`,'','make3');
     ask(10+rest,10,18,`10と ${rest}で ${10+rest}！ 10を つくれたね`,m=>{total+=m;done(total,`${a}+${b}`)},{
       hint:m=>{m.textContent='10の つぎは 11、12…'},
       reveal:()=>setAns(e,a+b)});
@@ -649,7 +649,6 @@ function qBorrow(){
     l.append(frameG([[ones,'r']]),el('span','plabel',knowOnes?String(ones):'？'));
     f.append(p,l);HP.set(f);
   };
-  HP.open();
   draw(false);
   slotNow(tA,1);
   setQ(`${a}は、10と いくつ？`,`${a} ひく ${b}。 ${a}は、10と いくつに わかれる`,'borrow1');
@@ -657,14 +656,14 @@ function qBorrow(){
     hint:m=>{m.textContent='10の わくの となりに、まるは いくつ ある？'},
     reveal:()=>{knowOnes=true;slotSet(tA,1,ones);draw(false)}});
   function step2(){
-    tA.slots[0].classList.add('now');
+    HP.close();tA.slots[0].classList.add('now');
     setQ(`${ones}から ${b}は とれないね。 10から ${b}を とると、いくつ のこる？`,'','borrow2');
     ask(left,0,10,`10から ${b} とって ${left}！`,m=>{total+=m;step3()},{
       hint:m=>{draw(true);m.textContent='×の ついていない あかい まるを かぞえてね'},
       reveal:()=>{tA.slots[0].classList.remove('now');draw(true,{pop:'x'})}});
   }
   function step3(){
-    setQ(`のこりの ${left}と、${ones}を あわせると いくつ？`,'','borrow3');
+    HP.close();setQ(`のこりの ${left}と、${ones}を あわせると いくつ？`,'','borrow3');
     ask(ans,0,10,`${left}と ${ones}で ${ans}！ 10から とれたね`,m=>{total+=m;done(total,`${a}−${b}`)},{
       hint:m=>{m.textContent='×の ついていない あかい まるを ぜんぶ かぞえてね'},
       reveal:()=>setAns(e,ans)});
