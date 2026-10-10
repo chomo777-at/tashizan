@@ -256,7 +256,7 @@ function el(tag,cls,html){const e=document.createElement(tag);if(cls)e.className
 /* ---------- voice ----------
    Recorded human-voice clips (voice/NN.m4a) are used when listed in CLIPS; anything else falls back
    to the iPad's system voice. On-screen text keeps the numbers; the clips are number-free prompts. */
-const CLIPS={/* filled when recordings arrive, e.g. see:'voice/01.m4a' */};
+const CLIPS={see:'/tashizan/voice/01.mp3',ten:'/tashizan/voice/02.mp3',sum:'/tashizan/voice/03.mp3',left:'/tashizan/voice/04.mp3',moved:'/tashizan/voice/05.mp3',borrow:'/tashizan/voice/06.mp3'};
 let lastSay='',lastClip='',curAudio=null;
 function playClip(id,fallback){
   lastClip=id;lastSay=fallback;
@@ -264,7 +264,7 @@ function playClip(id,fallback){
   const url=CLIPS[id];
   if(!url){say(fallback);return}
   try{speechSynthesis.cancel()}catch(e){}
-  try{if(curAudio){curAudio.pause()}curAudio=new Audio(url);curAudio.play().catch(()=>say(fallback))}catch(e){say(fallback)}
+  try{if(curAudio){curAudio.pause()}const au=new Audio(url);curAudio=au;au.play().catch(e=>{if(au===curAudio&&e&&e.name!=='AbortError')say(fallback)})}catch(e){say(fallback)}
 }
 function replay(){if(lastClip&&CLIPS[lastClip])playClip(lastClip,lastSay);else say(lastSay)}
 function say(t){
