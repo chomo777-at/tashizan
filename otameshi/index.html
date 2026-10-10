@@ -193,6 +193,14 @@ button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
 .slot{width:1.3em;height:1.3em;font-size:.92em;border-radius:50%;border:3px solid var(--ink);background:var(--card);display:grid;place-items:center;font-family:var(--hand);color:var(--soft);font-size:1em;line-height:1}
 .slot.now{box-shadow:0 0 0 5px var(--butter2),0 0 0 8px var(--butter);color:var(--ink)}
 .slot.filled{color:var(--ink);border-color:var(--ok)}
+.slot.mem{background:repeating-linear-gradient(45deg,var(--butter2) 0 6px,#fff 6px 12px);border-style:dashed}
+.cherry.stem{width:1.6em}
+.cherry.stem .slots{justify-content:center}
+.stemlabel{display:block;text-align:center;font-family:var(--hand);font-size:.62em;color:var(--blue);margin-top:.15em}
+.tok.b .slot.filled{border-color:var(--blue)}
+.radio{display:flex;flex-direction:column;gap:6px;margin-top:12px;font-size:1rem}
+.radio label{display:flex;align-items:center;gap:8px}
+.radio input{width:22px;height:22px}
 .coach.ask{min-height:0;max-width:640px}
 .coach.ask .bear{width:clamp(70px,11vmin,104px)}
 .coach.ask .bubble{font-size:clamp(1.2rem,3.4vmin,1.75rem);margin-bottom:14px}
@@ -493,6 +501,11 @@ function EQ(tokens){
       const sl=el('div','slots');tk.slots=tk.cherry.map(v=>{const s=el('span','slot',String(v));sl.appendChild(s);return s});
       c.appendChild(sl);d.appendChild(c);
     }
+    if(tk.stem){
+      const c=el('div','cherry stem','<svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0 L50 30"/></svg>');
+      const sl=el('div','slots');const s1=el('span','slot','?');sl.appendChild(s1);tk.slots=[s1];
+      c.append(sl,el('span','stemlabel',tk.stem));d.appendChild(c);
+    }
     tk.el=d;e.appendChild(d);
   });
   e.tk=tokens;return e;
@@ -589,8 +602,14 @@ function qSub10(){
     reveal:()=>setAns(e,ans)});
 }
 
+/* さくらんぼの数字を「おぼえて」計算するモード.
+   S.cherryMode: 'auto'(むずかしいで隠す) | 'show'(いつも見せる) | 'hide'(いつも隠す).
+   隠すときは、前のステップで答えた数字を次のステップで伏せ、問いかけの文からも数字を外す. */
+function memMode(){const m=S.cherryMode||'auto';if(m==='show')return false;if(m==='hide')return true;return !easyQ()&&S.level[R.mode]>=3}
+function slotHide(tk,i){const s=tk.slots[i];s.textContent='';s.classList.remove('filled');s.classList.add('mem');s.title='おぼえてる？'}
+
 /* 4: くりあがり（さくらんぼ計算）. The bigger number becomes 10: it is always RED, the smaller one BLUE
-   (color = role, so the voice can say "あかい まる"/"あおい まる"). The smaller number splits into a cherry. */
+   (color = role, so the voice can say "あかい"/"あおい"). The smaller number splits into a cherry. */
 function qMake(){
   const L=lvl();let x,y;
   if(L===0){x=9;y=rnd(2,3)}
@@ -600,7 +619,7 @@ function qMake(){
   const swap=L===0?false:L===1?Math.random()<.3:Math.random()<.5;
   const a=swap?Math.min(x,y):Math.max(x,y), b=swap?Math.max(x,y):Math.min(x,y);
   const tFirst=a>=b, T=tFirst?a:b, G=tFirst?b:a;
-  const need=10-T,rest=G-need;let total=0;
+  const need=10-T,rest=G-need;let total=0;const mem=memMode();
   const tA={t:a,c:tFirst?'r':'b'},tB={t:b,c:tFirst?'b':'r'};
   (tFirst?tB:tA).cherry=['?','?'];
   const e=EQ([tA,{t:'+',op:true},tB,{t:'=',op:true},{t:'?'}]);ST.appendChild(e);
@@ -618,31 +637,39 @@ function qMake(){
     hint:m=>{draw([[T,'r']],[[G,'b']],{hintEmpty:true});m.textContent='あかい まるの わくの、きいろい へやを かぞえてね'},
     reveal:()=>{slotSet(g,0,need);draw([[T,'r'],[need,'b']],[[rest,'b']],{pop:'b'})}});
   function step2(){
-    HP.close();slotNow(g,1);
-    setQ(`あおい ${G}を、${need}と □に わけるよ。 □は いくつ？`,`あおい ${G}を、${need}と なにに わけるよ。 なには いくつ`,'make2');
+    HP.close();
+    if(mem)slotHide(g,0);
+    slotNow(g,1);
+    setQ(mem?`あおい ${G}を、さっきの かずと □に わけるよ。 □は いくつ？`:`あおい ${G}を、${need}と □に わけるよ。 □は いくつ？`,
+         mem?`あおい ${G}を、さっきの かずと なにに わけるよ。 なには いくつ`:`あおい ${G}を、${need}と なにに わけるよ。 なには いくつ`,'make2');
     ask(rest,0,10,`${G}は ${need}と ${rest}に わかれたね！`,m=>{total+=m;step3()},{
       hint:m=>{m.textContent='あおい まるを '+need+'こ うつしたよ。 のこった あおい まるを かぞえてね'},
-      reveal:()=>slotSet(g,1,rest)});
+      reveal:()=>{slotSet(g,1,rest);if(mem)g.slots[0].textContent=need}});
   }
   function step3(){
-    HP.close();setQ(`10と ${rest}で、ぜんぶで いくつ？`,'','make3');
+    HP.close();
+    if(mem){slotHide(g,0);slotHide(g,1)}
+    g.slots[1].classList.add('now');
+    setQ(mem?'10と、さくらんぼの みぎの かずで、ぜんぶで いくつ？':`10と ${rest}で、ぜんぶで いくつ？`,'','make3');
     ask(10+rest,10,18,`10と ${rest}で ${10+rest}！ 10を つくれたね`,m=>{total+=m;done(total,`${a}+${b}`)},{
       hint:m=>{m.textContent='10の つぎは 11、12…'},
-      reveal:()=>setAns(e,a+b)});
+      reveal:()=>{g.slots[1].classList.remove('now');slotSet(g,0,need);slotSet(g,1,rest);setAns(e,a+b)}});
   }
 }
 
-/* 5: くりさがり（減加法）. 13−5: 13 = 10 と 3 → 10 から 5 をとる → のこりの 5 と 3 をあわせる */
+/* 5: くりさがり（減加法）. 13−5: 13 = 10 と 3（赤のさくらんぼ）→ 10 から 5 をとる（青の下に「のこり」）
+   → のこり と 3 をあわせる. 赤と青のさくらんぼは最後まで表示したまま. */
 function qBorrow(){
   const L=lvl();let a,b;
   if(L===0){a=rnd(11,12);b=9}
   else if(L===1){b=rnd(8,9);a=rnd(11,10+b-1)}
   else if(L===2){b=rnd(6,9);a=rnd(11,10+b-1)}
   else{b=rnd(2,9);a=rnd(11,Math.min(18,10+b-1))}
-  const ones=a-10,left=10-b,ans=left+ones;let total=0,knowOnes=false;
+  const ones=a-10,left=10-b,ans=left+ones;let total=0,knowOnes=false;const mem=memMode();
   const tA={t:a,c:'r',cherry:['10','?']};
-  const e=EQ([tA,{t:'−',op:true},{t:b,c:'b'},{t:'=',op:true},{t:'?'}]);ST.appendChild(e);
-  // work area: a pack of 10 + loose ones, labelled like the cherry
+  const tB={t:b,c:'b',stem:'のこり'};
+  const e=EQ([tA,{t:'−',op:true},tB,{t:'=',op:true},{t:'?'}]);ST.appendChild(e);
+  // hint panel: a pack of 10 + loose ones
   const draw=(taken,opt={})=>{
     const f=el('div','frames two');
     const p=el('div','pack'),l=el('div','pack');
@@ -652,22 +679,28 @@ function qBorrow(){
   };
   draw(false);
   slotNow(tA,1);
-  setQ(`${a}は、10と いくつ？`,`${a} ひく ${b}。 ${a}は、10と いくつに わかれる`,'borrow1');
+  setQ(`あかい ${a}は、10と いくつに わけられる？`,`${a} ひく ${b}。 あかい ${a}は、10と いくつに わけられる`,'borrow1');
   ask(ones,0,10,`${a}は 10と ${ones}！`,m=>{total+=m;step2()},{
     hint:m=>{m.textContent='10の わくの となりに、まるは いくつ ある？'},
     reveal:()=>{knowOnes=true;slotSet(tA,1,ones);draw(false)}});
   function step2(){
-    HP.close();tA.slots[0].classList.add('now');
-    setQ(`${ones}から ${b}は とれないね。 10から ${b}を とると、いくつ のこる？`,'','borrow2');
+    HP.close();
+    if(mem)slotHide(tA,1);
+    tA.slots[0].classList.add('now');slotNow(tB,0);
+    setQ(mem?`さくらんぼの みぎの かずからは ${b}は とれないね。 あおい ${b}を 10から とると、いくつ のこる？`
+            :`${ones}から ${b}は とれないね。 あおい ${b}を 10から とると、いくつ のこる？`,'','borrow2');
     ask(left,0,10,`10から ${b} とって ${left}！`,m=>{total+=m;step3()},{
       hint:m=>{draw(true);m.textContent='×の ついていない あかい まるを かぞえてね'},
-      reveal:()=>{tA.slots[0].classList.remove('now');draw(true,{pop:'x'})}});
+      reveal:()=>{tA.slots[0].classList.remove('now');slotSet(tB,0,left);draw(true,{pop:'x'})}});
   }
   function step3(){
-    HP.close();setQ(`のこりの ${left}と、${ones}を あわせると いくつ？`,'','borrow3');
+    HP.close();
+    if(mem){slotHide(tA,1);slotHide(tB,0)}
+    tA.slots[1].classList.add('now');tB.slots[0].classList.add('now');
+    setQ(mem?'あおの したの「のこり」と、さくらんぼの みぎの かずを あわせると いくつ？':`のこりの ${left}と、${ones}を あわせると いくつ？`,'','borrow3');
     ask(ans,0,10,`${left}と ${ones}で ${ans}！ 10から とれたね`,m=>{total+=m;done(total,`${a}−${b}`)},{
-      hint:m=>{m.textContent='×の ついていない あかい まるを ぜんぶ かぞえてね'},
-      reveal:()=>setAns(e,ans)});
+      hint:m=>{draw(true);m.textContent='×の ついていない あかい まるを ぜんぶ かぞえてね'},
+      reveal:()=>{slotSet(tA,1,ones);slotSet(tB,0,left);setAns(e,ans)}});
   }
 }
 
@@ -779,6 +812,11 @@ function parentView(){
   cb.onchange=()=>{S.voice=cb.checked;save();if(cb.checked)say('よみあげ を オンに したよ')};
   tg.append(cb,document.createTextNode('問題文を声で読み上げる（🔊ボタンでもう一度聞けます）'));
   p.appendChild(tg);
+  const rd=el('div','radio','<b>さくらんぼの数字（第4・5段階）</b>');
+  [['auto','自動：「むずかしい」になったら、前に答えた数字を隠して「おぼえて」計算'],['show','いつも見せる'],['hide','いつも隠す（頭の中でおぼえて計算）']].forEach(([v,t])=>{
+    const lb=el('label','');const r=el('input');r.type='radio';r.name='cherry';r.id='cherry-'+v;r.value=v;r.checked=(S.cherryMode||'auto')===v;
+    r.onchange=()=>{S.cherryMode=v;save()};lb.append(r,document.createTextNode(t));rd.appendChild(lb)});
+  p.appendChild(rd);
   const ex=el('div','');ex.id='parent-extra';p.appendChild(ex);demoPanel(ex);
   card.appendChild(p);
   const back=el('button','pbtn sub','もどる');back.id='parent-back';back.onclick=home;
