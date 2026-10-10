@@ -193,6 +193,12 @@ button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
 .slot{width:1.3em;height:1.3em;font-size:.92em;border-radius:50%;border:3px solid var(--ink);background:var(--card);display:grid;place-items:center;font-family:var(--hand);color:var(--soft);font-size:1em;line-height:1}
 .slot.now{box-shadow:0 0 0 5px var(--butter2),0 0 0 8px var(--butter);color:var(--ink)}
 .slot.filled{color:var(--ink);border-color:var(--ok)}
+.slot.pending{border-style:dashed;border-color:var(--red);background:#FFF6F2}
+.slot.ten{border-color:var(--red);color:var(--red)}
+.tok.focus > .v{text-decoration:underline;text-decoration-thickness:.08em;text-underline-offset:.12em;text-decoration-color:var(--butter)}
+.eq{position:relative}
+.eq.haslink{padding-bottom:.75em}
+.eq svg.link{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
 .slot.mem{background:repeating-linear-gradient(45deg,var(--butter2) 0 6px,#fff 6px 12px);border-style:dashed}
 .cherry.stem{width:1.6em}
 .cherry.stem .slots{justify-content:center}
@@ -503,12 +509,27 @@ function EQ(tokens){
     }
     if(tk.stem){
       const c=el('div','cherry stem','<svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0 L50 30"/></svg>');
-      const sl=el('div','slots');const s1=el('span','slot','?');sl.appendChild(s1);tk.slots=[s1];
+      const sl=el('div','slots');const s1=el('span','slot'+(tk.stemEmpty?' pending':''),tk.stemEmpty?'':'?');sl.appendChild(s1);tk.slots=[s1];
       c.append(sl,el('span','stemlabel',tk.stem));d.appendChild(c);
     }
     tk.el=d;e.appendChild(d);
   });
   e.tk=tokens;return e;
+}
+function drawLink(e,from,to,label){
+  const NS='http://www.w3.org/2000/svg';const svg=document.createElementNS(NS,'svg');svg.setAttribute('class','link');
+  e.classList.add('haslink');e.appendChild(svg);
+  const upd=()=>{
+    if(!document.body.contains(e))return window.removeEventListener('resize',upd);
+    const er=e.getBoundingClientRect(),f=from.getBoundingClientRect(),t=to.getBoundingClientRect();
+    const x1=f.left+f.width/2-er.left,y1=f.bottom-er.top+2,x2=t.left+t.width/2-er.left,y2=t.bottom-er.top+4,h=Math.max(30,er.height*.2);
+    const dir=x2>x1?1:-1;
+    svg.innerHTML=`<defs><marker id="ah" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4F84C4"/></marker></defs>
+      <path d="M${x1} ${y1} C ${x1} ${y1+h}, ${x2} ${y2+h}, ${x2} ${y2}" fill="none" stroke="#4F84C4" stroke-width="3" stroke-dasharray="7 5" marker-end="url(#ah)"/>
+      <text x="${(x1+x2)/2}" y="${Math.max(y1,y2)+h*.75+20}" text-anchor="middle" font-size="18" fill="#4F84C4" font-family="Klee One, Zen Maru Gothic, sans-serif">${label}</text>`;
+  };
+  requestAnimationFrame(upd);setTimeout(upd,300);window.addEventListener('resize',upd);
+  return svg;
 }
 function slotNow(tk,i){tk.slots.forEach((s,k)=>s.classList.toggle('now',k===i))}
 function slotSet(tk,i,v){const s=tk.slots[i];s.textContent=v;s.classList.remove('now');s.classList.add('filled')}
@@ -605,7 +626,7 @@ function qSub10(){
 /* さくらんぼの数字を「おぼえて」計算するモード.
    S.cherryMode: 'auto'(むずかしいで隠す) | 'show'(いつも見せる) | 'hide'(いつも隠す).
    隠すときは、前のステップで答えた数字を次のステップで伏せ、問いかけの文からも数字を外す. */
-function memMode(){const m=S.cherryMode||'auto';if(m==='show')return false;if(m==='hide')return true;return !easyQ()&&S.level[R.mode]>=3}
+function memMode(){const m=S.cherryMode||'auto';if(easyQ()||m==='show')return false;if(m==='hide')return true;return !easyQ()&&S.level[R.mode]>=3}
 function slotHide(tk,i){const s=tk.slots[i];s.textContent='';s.classList.remove('filled');s.classList.add('mem');s.title='おぼえてる？'}
 
 /* 4: くりあがり（さくらんぼ計算）. The bigger number becomes 10: it is always RED, the smaller one BLUE
@@ -621,9 +642,11 @@ function qMake(){
   const tFirst=a>=b, T=tFirst?a:b, G=tFirst?b:a;
   const need=10-T,rest=G-need;let total=0;const mem=memMode();
   const tA={t:a,c:tFirst?'r':'b'},tB={t:b,c:tFirst?'b':'r'};
-  (tFirst?tB:tA).cherry=['?','?'];
+  const g=tFirst?tB:tA, rT=tFirst?tA:tB;   // g = blue (split), rT = red (becomes 10)
+  g.cherry=['?','?'];rT.stem=' ';rT.stemEmpty=true;
   const e=EQ([tA,{t:'+',op:true},tB,{t:'=',op:true},{t:'?'}]);ST.appendChild(e);
-  const g=tFirst?tB:tA;
+  drawLink(e,g.slots[0],rT.slots[0],'あげて 10に');
+  const focus=(tk)=>{[tA,tB].forEach(x=>x.el.classList.toggle('focus',x===tk))};
   const draw=(tp,gp,opt={})=>{
     const f=el('div','frames two');
     const tf=frameG(tp,Object.assign({target:true},opt)), gf=frameG(gp);
@@ -631,15 +654,15 @@ function qMake(){
     HP.set(f);
   };
   draw([[T,'r']],[[G,'b']]);
-  slotNow(g,0);
-  setQ(`あかい ${T}は、あと いくつで 10？`,`${a} たす ${b}。 あかい ${T}は、あと いくつで 10に なる`,'make1');
+  slotNow(g,0);focus(rT);
+  setQ(`あかい ${T}は、あと いくつで 10？ （あおい ${G}から あげるよ）`,`${a} たす ${b}。 あかい ${T}は、あと いくつで 10に なる`,'make1');
   ask(need,0,10,`10まで あと ${need}だね！`,m=>{total+=m;step2()},{
     hint:m=>{draw([[T,'r']],[[G,'b']],{hintEmpty:true});m.textContent='あかい まるの わくの、きいろい へやを かぞえてね'},
-    reveal:()=>{slotSet(g,0,need);draw([[T,'r'],[need,'b']],[[rest,'b']],{pop:'b'})}});
+    reveal:()=>{slotSet(g,0,need);const r=rT.slots[0];r.classList.remove('pending');r.classList.add('filled','ten');r.textContent='10';draw([[T,'r'],[need,'b']],[[rest,'b']],{pop:'b'})}});
   function step2(){
     HP.close();
     if(mem)slotHide(g,0);
-    slotNow(g,1);
+    slotNow(g,1);focus(g);
     setQ(mem?`あおい ${G}を、さっきの かずと □に わけるよ。 □は いくつ？`:`あおい ${G}を、${need}と □に わけるよ。 □は いくつ？`,
          mem?`あおい ${G}を、さっきの かずと なにに わけるよ。 なには いくつ`:`あおい ${G}を、${need}と なにに わけるよ。 なには いくつ`,'make2');
     ask(rest,0,10,`${G}は ${need}と ${rest}に わかれたね！`,m=>{total+=m;step3()},{
@@ -649,11 +672,11 @@ function qMake(){
   function step3(){
     HP.close();
     if(mem){slotHide(g,0);slotHide(g,1)}
-    g.slots[1].classList.add('now');
-    setQ(mem?'10と、さくらんぼの みぎの かずで、ぜんぶで いくつ？':`10と ${rest}で、ぜんぶで いくつ？`,'','make3');
+    focus(null);g.slots[1].classList.add('now');rT.slots[0].classList.add('now');
+    setQ(mem?'あかの「10」と、さくらんぼの みぎの かずで、ぜんぶで いくつ？':`あかの 10と、あおの ${rest}で、ぜんぶで いくつ？`,'','make3');
     ask(10+rest,10,18,`10と ${rest}で ${10+rest}！ 10を つくれたね`,m=>{total+=m;done(total,`${a}+${b}`)},{
       hint:m=>{m.textContent='10の つぎは 11、12…'},
-      reveal:()=>{g.slots[1].classList.remove('now');slotSet(g,0,need);slotSet(g,1,rest);setAns(e,a+b)}});
+      reveal:()=>{g.slots[1].classList.remove('now');rT.slots[0].classList.remove('now');slotSet(g,0,need);slotSet(g,1,rest);setAns(e,a+b)}});
   }
 }
 
@@ -678,7 +701,7 @@ function qBorrow(){
     f.append(p,l);HP.set(f);
   };
   draw(false);
-  slotNow(tA,1);
+  slotNow(tA,1);tA.el.classList.add('focus');
   setQ(`あかい ${a}は、10と いくつに わけられる？`,`${a} ひく ${b}。 あかい ${a}は、10と いくつに わけられる`,'borrow1');
   ask(ones,0,10,`${a}は 10と ${ones}！`,m=>{total+=m;step2()},{
     hint:m=>{m.textContent='10の わくの となりに、まるは いくつ ある？'},
@@ -686,7 +709,7 @@ function qBorrow(){
   function step2(){
     HP.close();
     if(mem)slotHide(tA,1);
-    tA.slots[0].classList.add('now');slotNow(tB,0);
+    tA.slots[0].classList.add('now');slotNow(tB,0);tA.el.classList.remove('focus');tB.el.classList.add('focus');
     setQ(mem?`さくらんぼの みぎの かずからは ${b}は とれないね。 あおい ${b}を 10から とると、いくつ のこる？`
             :`${ones}から ${b}は とれないね。 あおい ${b}を 10から とると、いくつ のこる？`,'','borrow2');
     ask(left,0,10,`10から ${b} とって ${left}！`,m=>{total+=m;step3()},{
@@ -696,7 +719,7 @@ function qBorrow(){
   function step3(){
     HP.close();
     if(mem){slotHide(tA,1);slotHide(tB,0)}
-    tA.slots[1].classList.add('now');tB.slots[0].classList.add('now');
+    tB.el.classList.remove('focus');tA.slots[1].classList.add('now');tB.slots[0].classList.add('now');
     setQ(mem?'あおの したの「のこり」と、さくらんぼの みぎの かずを あわせると いくつ？':`のこりの ${left}と、${ones}を あわせると いくつ？`,'','borrow3');
     ask(ans,0,10,`${left}と ${ones}で ${ans}！ 10から とれたね`,m=>{total+=m;done(total,`${a}−${b}`)},{
       hint:m=>{draw(true);m.textContent='×の ついていない あかい まるを ぜんぶ かぞえてね'},
