@@ -159,7 +159,7 @@ button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
   .frames.two{flex-direction:column;--c:clamp(26px,min(7.4vh,4.6vw),64px)}
   .frames{--c:clamp(34px,min(10vh,6vw),88px)}
   .home{grid-template-columns:auto 1fr;align-items:start}
-  .home .coach{grid-column:1/-1}
+  .home .homehead{grid-column:1/-1}
 }
 .q,.bubble,.tile .t,.banner,.clear,.iname,.pbtn,.top h1{word-break:keep-all;overflow-wrap:anywhere}
 /* vertical centering + celebratory screens */
@@ -224,10 +224,28 @@ button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
 .plabel{font-family:var(--hand);font-size:1.1rem;color:var(--soft)}
 .qmain .hidebox{min-height:calc(var(--c)*2.6)}
 @media (orientation:landscape) and (min-width:900px){
-  .qs{grid-template-columns:1.15fr .85fr;align-items:center;align-content:center}
+  .qs.withhint{grid-template-columns:1.15fr .85fr;align-items:center;align-content:center}
+  .qs:not(.withhint){max-width:760px;margin:0 auto;width:100%}
   .hint .frames.two{flex-direction:column;--c:clamp(22px,min(6.4vh,3.6vw),52px)}
   .hint .frames{--c:clamp(24px,min(8vh,4.4vw),60px)}
 }
+/* v14 */
+.abtn.wrong{opacity:.32;position:relative;box-shadow:none}
+.abtn.wrong::after{content:"×";position:absolute;right:8%;top:2%;font-size:.5em;color:var(--red)}
+.slot.later,.cherry.later{visibility:hidden}
+.homehead{display:flex;flex-direction:column;gap:10px}
+.sdots{display:flex;gap:10px;justify-content:center;min-height:16px}
+.sdots i{width:16px;height:16px;border-radius:50%;border:2.5px solid var(--line);background:var(--card)}
+.sdots i.d{background:var(--sage);border-color:#6E9461}
+.sdots i.c{background:var(--butter);border-color:#D9A93A}
+.qsub{font-family:var(--hand);color:var(--soft);margin:0;text-align:center}
+.pstat,.pbackup{margin-top:14px;display:flex;flex-direction:column;gap:6px}
+.ptable{border-collapse:collapse;font-size:.92rem}
+.ptable td{border-bottom:1px solid var(--line);padding:4px 8px 4px 0}
+.code{width:100%;box-sizing:border-box;font-family:ui-monospace,monospace;font-size:.8rem;border:2px solid var(--line);border-radius:10px;padding:6px;background:#fff;-webkit-user-select:text;user-select:text}
+.pbtn.small{font-size:1rem;padding:6px 16px;align-self:flex-start}
+.warn{background:#FFF0EA;border:2px solid var(--red);border-radius:10px;padding:8px 10px;margin:0}
+.pmsg{min-height:1.2em;margin:0;color:var(--blue)}
 /* demo (parent only) */
 .ribbon{position:fixed;left:50%;bottom:calc(8px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--red);color:#fff;font-family:var(--hand);padding:3px 16px;border-radius:999px;z-index:4;pointer-events:none;font-size:.9rem;opacity:.9}
 .demo{margin-top:14px;border-top:2px dashed var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px}
@@ -311,23 +329,37 @@ const CLIPS={see:'/tashizan/voice/01.mp3',ten:'/tashizan/voice/02.mp3',sum:'/tas
   make1:'/tashizan/voice/07.mp3',make2:'/tashizan/voice/08.mp3',make3:'/tashizan/voice/09.mp3',
   borrow1:'/tashizan/voice/10b.mp3',borrow2:'/tashizan/voice/11b.mp3',borrow3:'/tashizan/voice/12.mp3'};
 let lastSay='',lastClip='',curAudio=null;
-function playClip(id,fallback){
+function playClip(id,fallback,onEnd){
   lastClip=id;lastSay=fallback;
-  if(!S.voice)return;
+  let fired=false;const fin=()=>{if(!fired){fired=true;onEnd&&onEnd()}};
+  if(onEnd)setTimeout(fin,6000);           // safety: never wait forever
+  if(!S.voice){if(onEnd)setTimeout(fin,300);return}
   const url=CLIPS[id];
-  if(!url){say(fallback);return}
+  if(!url){say(fallback,fin);return}
   try{speechSynthesis.cancel()}catch(e){}
-  try{if(curAudio){curAudio.pause()}const au=new Audio(url);curAudio=au;au.play().catch(e=>{if(au===curAudio&&e&&e.name!=='AbortError')say(fallback)})}catch(e){say(fallback)}
+  try{if(curAudio){curAudio.pause()}const au=new Audio(url);curAudio=au;au.onended=fin;au.onerror=fin;au.play().catch(e=>{if(au===curAudio&&e&&e.name!=='AbortError')say(fallback,fin);else fin()})}catch(e){say(fallback,fin)}
+}
+/* tiny sound effects (Web Audio, no files). Start only from a tap, as iPad requires. */
+let AC=null;
+function sfx(kind){
+  if(S.sfx===false)return;
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume();
+    const t=AC.currentTime;const notes=kind==='ok'?[[784,0],[1047,.1]]:[[330,0],[262,.12]];
+    notes.forEach(([f,d])=>{const o=AC.createOscillator(),g=AC.createGain();o.type=kind==='ok'?'triangle':'sine';o.frequency.value=f;
+      g.gain.setValueAtTime(.0001,t+d);g.gain.exponentialRampToValueAtTime(kind==='ok'?.2:.12,t+d+.02);g.gain.exponentialRampToValueAtTime(.0001,t+d+.28);
+      o.connect(g);g.connect(AC.destination);o.start(t+d);o.stop(t+d+.32)});
+  }catch(e){}
 }
 function replay(){if(lastClip&&CLIPS[lastClip])playClip(lastClip,lastSay);else say(lastSay)}
-function say(t){
+function say(t,onEnd){
   if(!t)return;
-  if(!S.voice)return;
+  if(!S.voice){onEnd&&onEnd();return}
   try{
     const s=t.replace(/−/g,' ひく ').replace(/\+/g,' たす ').replace(/=/g,' は ').replace(/[?？]/g,'').replace(/□/g,'なに');
-    const u=new SpeechSynthesisUtterance(s);u.lang='ja-JP';u.rate=.9;u.pitch=1.1;
+    const u=new SpeechSynthesisUtterance(s);u.lang='ja-JP';u.rate=.9;u.pitch=1.1;if(onEnd){u.onend=onEnd;u.onerror=onEnd}
     speechSynthesis.cancel();speechSynthesis.speak(u);
-  }catch(e){}
+  }catch(e){onEnd&&onEnd()}
 }
 
 /* ---------- the bear "ぽっけ" (original character) ---------- */
@@ -452,52 +484,69 @@ function home(){
   if(t&&!t.sticker){msg='シールを はろう！'}
   else if(t&&t.sticker){msg='きょうも できたね！ もっと やる？';mood='happy'}
   else{msg='きょうは 「'+MODES[rec].title+'」を やってみよう'}
+  const rs=S.resume&&S.resume.date===todayStr()&&MODES.some((m,i)=>m.id===S.resume.mode&&isOpen(i))?S.resume:null;
+  if(rs){msg='「'+MODE_NAME[rs.mode]+'」の つづきから やる？';mood='normal'}
   const co=coach(mood,msg,false);
-  if(t&&!t.sticker){const go=el('button','pbtn sun','シールを えらぶ');go.id='go-sticker';go.onclick=stickerPick;co.appendChild(go)}
-  wrap.append(co,left,right);card.appendChild(wrap);
+  if(rs){const go=el('button','pbtn','つづきから（'+(rs.i+1)+'もんめ）');go.id='resume';go.onclick=()=>{R={mode:rs.mode,i:rs.i,n:rs.n,first:rs.first,missRun:rs.missRun,okRun:rs.okRun,facts:rs.facts||[]};next()};co.btn=go}
+  if(t&&!t.sticker&&!co.btn){const go=el('button','pbtn sun','シールを えらぶ');go.id='go-sticker';go.onclick=stickerPick;co.btn=go}
+  const head=el('div','homehead');head.appendChild(co);if(co.btn){const r=el('div','row');r.appendChild(co.btn);head.appendChild(r)}
+  wrap.append(head,left,right);card.appendChild(wrap);
 }
 
 /* ---------- round ----------
    Screen order follows how a child solves: equation → ぽっけ asks → answer → (hint).
-   Dots live in the hint panel: hidden for 2・3, open as a work area for 4・5 (the voice refers to them),
-   opened automatically after a miss, and shown filled in after a correct answer as 答え合わせ. */
-let R=null, ST=null, AR=null, CO=null, HP=null;
-function start(mode){R={mode,i:0,n:5,first:0,missRun:0,okRun:0,facts:[]};next()}
+   The hint panel (dots) stays hidden until the first miss — so dots can't replace thinking — and is shown
+   after a correct answer as 答え合わせ. A wrong choice is disabled; after 2 misses the choices are re-rolled
+   so the last remaining button can't be "found" by elimination. Any miss = not 「ひとりで」. */
+let R=null, ST=null, AR=null, CO=null, HP=null, SD=null, QS=null;
+function start(mode){R={mode,i:0,n:5,first:0,missRun:0,okRun:0,facts:[]};S.resume=null;next()}
 function easyQ(){return R.i===0||R.i===R.n-1}
 function lvl(){return easyQ()?0:S.level[R.mode]}
+const MEM_MODES=['make','borrow'];
 function done(miss,fact){
   if(miss===0){R.first++;R.facts.push(fact);R.okRun++;R.missRun=0}
   else{R.missRun++;R.okRun=0}
   if(!easyQ()){
     if(R.missRun>=2){S.level[R.mode]=Math.max(1,S.level[R.mode]-1);R.missRun=0}
     if(R.okRun>=2&&S.level[R.mode]<3){S.level[R.mode]++;R.okRun=0}
-    save();
+    // 「おぼえて計算」は、むずかしいで 2回つづけて ひとりで正解してから
+    if(MEM_MODES.includes(R.mode)){
+      S.memStreak=S.memStreak||{};
+      S.memStreak[R.mode]=(S.level[R.mode]>=3&&miss===0)?(S.memStreak[R.mode]||0)+1:0;
+    }
   }
-  R.i++;next();
+  R.i++;save();next();
 }
 function hintPanel(){
-  const p=el('section','hint');p.setAttribute('aria-label','ヒント');
+  const p=el('section','hint');p.setAttribute('aria-label','ヒント');p.hidden=true;
   const head=el('div','hhead','<span class="hlabel">💡 ヒント</span>');
-  const body=el('div','hbody');const btn=el('button','hbtn','ヒントを みる');btn.type='button';btn.id='hint-btn';
-  head.appendChild(btn);p.append(head,body);
-  p.open=()=>{p.classList.add('open');btn.hidden=true};
-  p.close=()=>{p.classList.remove('open');btn.hidden=false};
+  const body=el('div','hbody');p.append(head,body);
+  p.open=()=>{if(p.never)return;p.hidden=false;p.classList.add('open');QS&&QS.classList.add('withhint')};
+  p.close=()=>{p.hidden=true;p.classList.remove('open');QS&&QS.classList.remove('withhint')};
   p.set=(...nodes)=>{body.innerHTML='';nodes.forEach(n=>body.appendChild(n))};
   p.frames=()=>body.querySelector('.frames');
-  btn.onclick=p.open;
   return p;
+}
+function stepTo(i){
+  if(!SD)return;SD.innerHTML='';
+  if(R.steps<=1){SD.hidden=true;return}
+  SD.hidden=false;
+  for(let k=0;k<R.steps;k++)SD.appendChild(el('i',k<i?'d':k===i?'c':''));
 }
 function next(){
   if(R.i>=R.n)return finish();
+  S.resume={mode:R.mode,i:R.i,n:R.n,first:R.first,missRun:R.missRun,okRun:R.okRun,facts:R.facts,date:todayStr()};save();
+  R.steps={make:3,borrow:3}[R.mode]||1;
   topbar('q');card.innerHTML='';
-  const qs=el('div','qs');const main=el('div','qmain');
-  ST=el('div','stage');CO=coach('normal','',false);CO.classList.add('ask');AR=el('div','area');HP=hintPanel();
-  main.append(ST,CO,AR);qs.append(main,HP);card.appendChild(qs);
+  QS=el('div','qs');const main=el('div','qmain');
+  ST=el('div','stage');SD=el('div','sdots');CO=coach('normal','',false);CO.classList.add('ask');AR=el('div','area');HP=hintPanel();
+  main.append(ST,SD,CO,AR);QS.append(main,HP);card.appendChild(QS);
+  stepTo(0);
   ({see:qSee,ten:qTen,add10:qAdd10,sub10:qSub10,make:qMake,borrow:qBorrow})[R.mode]();
 }
-// the question is what ぽっけ says
-function setQ(t,speech,clip=''){CO.set('normal',t,'');playClip(clip,speech||t)}
-// equation builder. tokens: {t,c:'r'|'b',op,cherry:[x,y]}
+// the question is what ぽっけ says (keep it to one short line; the voice can say more)
+function setQ(t,speech,clip='',onEnd){CO.set('normal',t,'');playClip(clip,speech||t,onEnd)}
+// equation builder. tokens: {t,c:'r'|'b',op,cherry:[x,y],stem}
 function EQ(tokens){
   const e=el('div','eq');
   tokens.forEach(tk=>{
@@ -505,75 +554,81 @@ function EQ(tokens){
     if(tk.cherry){
       const c=el('div','cherry','<svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0 L22 30 M50 0 L78 30"/></svg>');
       const sl=el('div','slots');tk.slots=tk.cherry.map(v=>{const s=el('span','slot',String(v));sl.appendChild(s);return s});
-      c.appendChild(sl);d.appendChild(c);
+      c.appendChild(sl);d.appendChild(c);tk.cherryEl=c;
     }
     if(tk.stem){
       const c=el('div','cherry stem','<svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0 L50 30"/></svg>');
       const sl=el('div','slots');const s1=el('span','slot'+(tk.stemEmpty?' pending':''),tk.stemEmpty?'':'?');sl.appendChild(s1);tk.slots=[s1];
-      c.append(sl,el('span','stemlabel',tk.stem));d.appendChild(c);
+      c.append(sl,el('span','stemlabel',tk.stem));d.appendChild(c);tk.stemEl=c;
     }
     tk.el=d;e.appendChild(d);
   });
   e.tk=tokens;return e;
 }
-function drawLink(e,from,to,label){
+function drawLink(e,from,to){
   const NS='http://www.w3.org/2000/svg';const svg=document.createElementNS(NS,'svg');svg.setAttribute('class','link');
   e.classList.add('haslink');e.appendChild(svg);
   const upd=()=>{
-    if(!document.body.contains(e))return window.removeEventListener('resize',upd);
+    if(!document.body.contains(svg))return window.removeEventListener('resize',upd);
     const er=e.getBoundingClientRect(),f=from.getBoundingClientRect(),t=to.getBoundingClientRect();
     const x1=f.left+f.width/2-er.left,y1=f.bottom-er.top+2,x2=t.left+t.width/2-er.left,y2=t.bottom-er.top+4,h=Math.max(30,er.height*.2);
-    const dir=x2>x1?1:-1;
     svg.innerHTML=`<defs><marker id="ah" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4F84C4"/></marker></defs>
-      <path d="M${x1} ${y1} C ${x1} ${y1+h}, ${x2} ${y2+h}, ${x2} ${y2}" fill="none" stroke="#4F84C4" stroke-width="3" stroke-dasharray="7 5" marker-end="url(#ah)"/>
-      <text x="${(x1+x2)/2}" y="${Math.max(y1,y2)+h*.75+20}" text-anchor="middle" font-size="18" fill="#4F84C4" font-family="Klee One, Zen Maru Gothic, sans-serif">${label}</text>`;
+      <path d="M${x1} ${y1} C ${x1} ${y1+h}, ${x2} ${y2+h}, ${x2} ${y2}" fill="none" stroke="#4F84C4" stroke-width="3" stroke-dasharray="7 5" marker-end="url(#ah)"/>`;
   };
   requestAnimationFrame(upd);setTimeout(upd,300);window.addEventListener('resize',upd);
   return svg;
 }
 function slotNow(tk,i){tk.slots.forEach((s,k)=>s.classList.toggle('now',k===i))}
-function slotSet(tk,i,v){const s=tk.slots[i];s.textContent=v;s.classList.remove('now');s.classList.add('filled')}
+function slotSet(tk,i,v){const s=tk.slots[i];s.textContent=v;s.classList.remove('now','mem','later');s.classList.add('filled')}
 function setAns(e,v){const t=e.tk[e.tk.length-1];t.el.querySelector('.v').textContent=v;t.el.classList.add('answered')}
 // ask: praise names the strategy, not the child
 function ask(ans,lo,hi,praise,onOk,{hint,reveal}={}){
-  AR.innerHTML='';const box=el('div','answers');let miss=0;
-  choices(ans,lo,hi).forEach((v,k)=>{
-    const b=el('button','abtn'+(PEEK&&v===ans?' peekans':''),v);b.type='button';b.id='ans-'+k;
-    b.onclick=()=>{
-      if(v===ans){
-        b.classList.add('ok');box.querySelectorAll('button').forEach(x=>x.disabled=true);
-        if(reveal)reveal();
-        HP.open();
-        const fr=HP.frames();if(fr){fr.classList.remove('yay');void fr.offsetWidth;fr.classList.add('yay')}
-        CO.set(miss===0?'cheer':'happy',miss===0?praise:'みなおして わかったね！','good');
-        const nx=el('button','pbtn nextbtn','つぎへ ▶');nx.type='button';nx.id='next';
-        nx.onclick=()=>{nx.disabled=true;onOk(miss)};
-        AR.appendChild(nx);
-      }else{
-        miss++;b.classList.remove('no');void b.offsetWidth;b.classList.add('no');
-        const m={textContent:'おしい！ ヒントを みてみよう'};
-        if(hint)hint(m);
-        HP.open();
-        CO.set('think',m.textContent);
-      }
-    };
-    box.appendChild(b);
-  });
-  AR.appendChild(box);
+  let miss=0;
+  const render=()=>{
+    AR.innerHTML='';const box=el('div','answers');
+    choices(ans,lo,hi).forEach((v,k)=>{
+      const b=el('button','abtn'+(PEEK&&v===ans?' peekans':''),v);b.type='button';b.id='ans-'+k;
+      b.onclick=()=>{
+        if(v===ans){
+          sfx('ok');
+          b.classList.add('ok');box.querySelectorAll('button').forEach(x=>x.disabled=true);
+          if(reveal)reveal();
+          HP.open();
+          const fr=HP.frames();if(fr){fr.classList.remove('yay');void fr.offsetWidth;fr.classList.add('yay')}
+          CO.set(miss===0?'cheer':'happy',miss===0?praise:'みなおして わかったね！','good');
+          const nx=el('button','pbtn nextbtn','つぎへ ▶');nx.type='button';nx.id='next';
+          nx.onclick=()=>{nx.disabled=true;onOk(miss)};
+          AR.appendChild(nx);
+        }else{
+          sfx('no');miss++;
+          b.disabled=true;b.classList.add('wrong');b.classList.remove('no');void b.offsetWidth;b.classList.add('no');
+          const m={textContent:'おしい！ ヒントを みてね'};
+          if(hint)hint(m);
+          HP.open();
+          if(miss>=2){m.textContent='もう いちど かんがえよう';setTimeout(()=>{if(document.body.contains(box))render()},700)}
+          CO.set('think',m.textContent);
+        }
+      };
+      box.appendChild(b);
+    });
+    AR.appendChild(box);
+  };
+  render();
 }
 
-/* 1: the dots ARE the question here */
+/* 1: the dots ARE the question here. The 3-second look starts after the question has been read out. */
 function qSee(){
-  HP.hidden=true;
+  HP.never=true;
   const L=lvl();
   const n=L===0?rnd(1,5):L===1?rnd(2,6):L===2?rnd(3,8):rnd(3,10);
   const fh=el('div','frames hidebox');fh.appendChild(frameG([[n,'r']]));ST.appendChild(fh);
-  setQ('ぱっと みて！ いくつ？','','see');
-  const t=setTimeout(()=>{fh.innerHTML='<span class="peek">？</span>'},3000);
+  let t=null,over=false;
+  const show=()=>{over=true;clearTimeout(t);fh.innerHTML='';fh.appendChild(frameG([[n,'r']]))};
+  setQ('ぱっと みて！ いくつ？','','see',()=>{if(!over)t=setTimeout(()=>{if(!over)fh.innerHTML='<span class="peek">？</span>'},3000)});
   const praise=n>5?'5と '+(n-5)+'で '+n+'！ よく みたね':'かたちで わかったね！';
-  ask(n,1,10,praise,miss=>{clearTimeout(t);done(miss,String(n))},{
-    hint:m=>{clearTimeout(t);fh.innerHTML='';fh.appendChild(frameG([[n,'r']]));m.textContent=n>=5?'うえの だんは 5こ。 したは？':'うえの だんを みてね'},
-    reveal:()=>{clearTimeout(t);fh.innerHTML='';fh.appendChild(frameG([[n,'r']]))}});
+  ask(n,1,10,praise,miss=>{show();done(miss,String(n))},{
+    hint:m=>{show();m.textContent=n>=5?'うえの だんは 5こ。 したは？':'うえの だんを みてね'},
+    reveal:show});
 }
 
 /* 2: 10 の なかよし */
@@ -584,7 +639,7 @@ function qTen(){
   const show=(opt,blue=0)=>{const f=el('div','frames');f.appendChild(frameG([[n,'r'],[blue,'b']],opt));HP.set(f)};
   show({});
   setQ('あと いくつで 10？',`${n} と なに で 10。 あと いくつで 10`,'ten');
-  ask(10-n,0,10,`${n}と ${10-n}で 10を つくれたね！`,miss=>done(miss,`${n}と${10-n}`),{
+  ask(10-n,0,10,`${n}と ${10-n}で 10！`,miss=>done(miss,`${n}と${10-n}`),{
     hint:m=>{show({hintEmpty:true});m.textContent='きいろの へやは いくつ？'},
     reveal:()=>{e.tk[2].el.querySelector('.v').textContent=10-n;e.tk[2].el.classList.add('answered');e.tk[2].el.classList.add('b');show({pop:'b'},10-n)}});
 }
@@ -600,9 +655,9 @@ function qAdd10(){
   const e=EQ([{t:a,c:'r'},{t:'+',op:true},{t:b,c:'b'},{t:'=',op:true},{t:'?'}]);ST.appendChild(e);
   const f=el('div','frames');f.appendChild(frameG([[a,'r'],[b,'b']]));HP.set(f);
   setQ('あわせて いくつ？',`${a} たす ${b} は。 あわせて いくつ`,'sum');
-  const praise=s===10?'10が できたね！':s>5?`5と ${s-5}で ${s}！ よく みたね`:'かたちで わかったね！';
+  const praise=s===10?'10が できたね！':s>5?`5と ${s-5}で ${s}！`:'かたちで わかったね！';
   ask(s,1,10,praise,miss=>done(miss,`${a}+${b}`),{
-    hint:m=>{m.textContent=s>5?'うえの だんは 5。 したの だんは？':'あかと あおを あわせると？'},
+    hint:m=>{m.textContent=s>5?'うえの だんは 5。 したは？':'あかと あおを あわせると？'},
     reveal:()=>setAns(e,s)});
 }
 
@@ -617,20 +672,24 @@ function qSub10(){
   const e=EQ([{t:a,c:'r'},{t:'−',op:true},{t:b,c:'b'},{t:'=',op:true},{t:'?'}]);ST.appendChild(e);
   const f=el('div','frames');f.appendChild(frameG([[ans,'r'],[b,'x']]));HP.set(f);
   setQ('のこりは いくつ？',`${a} ひく ${b} は。 のこりは いくつ`,'left');
-  const praise=a===10?`${ans}と ${b}で 10 だね！`:`${ans}と ${b}で ${a}！ よく みたね`;
+  const praise=a===10?`${ans}と ${b}で 10！`:`${ans}と ${b}で ${a}！`;
   ask(ans,0,10,praise,miss=>done(miss,`${a}−${b}`),{
-    hint:m=>{m.textContent=ans>=5?'×じゃない あかい まるは？ うえの だんは 5':'×じゃない あかい まるは いくつ？'},
+    hint:m=>{m.textContent='×じゃない あかい まるは？'},
     reveal:()=>setAns(e,ans)});
 }
 
 /* さくらんぼの数字を「おぼえて」計算するモード.
-   S.cherryMode: 'auto'(むずかしいで隠す) | 'show'(いつも見せる) | 'hide'(いつも隠す).
-   隠すときは、前のステップで答えた数字を次のステップで伏せ、問いかけの文からも数字を外す. */
-function memMode(){const m=S.cherryMode||'auto';if(easyQ()||m==='show')return false;if(m==='hide')return true;return !easyQ()&&S.level[R.mode]>=3}
+   S.cherryMode: 'auto' | 'show' | 'hide'. auto は「むずかしい」で 2回つづけて ひとりで正解してから隠す.
+   隠すときは、前のステップで答えた数字を伏せ、問いかけの文からも数字を外す. 易しい問題では隠さない. */
+function memMode(){
+  const m=S.cherryMode||'auto';if(easyQ()||m==='show')return false;if(m==='hide')return true;
+  return S.level[R.mode]>=3&&((S.memStreak||{})[R.mode]||0)>=2;
+}
 function slotHide(tk,i){const s=tk.slots[i];s.textContent='';s.classList.remove('filled');s.classList.add('mem');s.title='おぼえてる？'}
 
-/* 4: くりあがり（さくらんぼ計算）. The bigger number becomes 10: it is always RED, the smaller one BLUE
-   (color = role, so the voice can say "あかい"/"あおい"). The smaller number splits into a cherry. */
+/* 4: くりあがり（さくらんぼ計算）. The bigger number becomes 10: always RED; the smaller one BLUE splits.
+   Only what the current step needs is shown: step1 = left cherry slot + arrow to the red「10」,
+   step2 = right slot, step3 = 10 と right slot. */
 function qMake(){
   const L=lvl();let x,y;
   if(L===0){x=9;y=rnd(2,3)}
@@ -645,8 +704,8 @@ function qMake(){
   const g=tFirst?tB:tA, rT=tFirst?tA:tB;   // g = blue (split), rT = red (becomes 10)
   g.cherry=['?','?'];rT.stem=' ';rT.stemEmpty=true;
   const e=EQ([tA,{t:'+',op:true},tB,{t:'=',op:true},{t:'?'}]);ST.appendChild(e);
-  drawLink(e,g.slots[0],rT.slots[0],'あげて 10に');
-  const focus=(tk)=>{[tA,tB].forEach(x=>x.el.classList.toggle('focus',x===tk))};
+  g.slots[1].classList.add('later');
+  const arrow=drawLink(e,g.slots[0],rT.slots[0]);
   const draw=(tp,gp,opt={})=>{
     const f=el('div','frames two');
     const tf=frameG(tp,Object.assign({target:true},opt)), gf=frameG(gp);
@@ -654,34 +713,34 @@ function qMake(){
     HP.set(f);
   };
   draw([[T,'r']],[[G,'b']]);
-  slotNow(g,0);focus(rT);
-  setQ(`あかい ${T}は、あと いくつで 10？ （あおい ${G}から あげるよ）`,`${a} たす ${b}。 あかい ${T}は、あと いくつで 10に なる`,'make1');
-  ask(need,0,10,`10まで あと ${need}だね！`,m=>{total+=m;step2()},{
-    hint:m=>{draw([[T,'r']],[[G,'b']],{hintEmpty:true});m.textContent='あかい まるの わくの、きいろい へやを かぞえてね'},
+  slotNow(g,0);stepTo(0);
+  setQ(`あかい ${T}は あと いくつで 10？`,`${a} たす ${b}。 あかい ${T}は、あと いくつで 10に なる`,'make1');
+  ask(need,0,10,`10まで あと ${need}！`,m=>{total+=m;step2()},{
+    hint:m=>{draw([[T,'r']],[[G,'b']],{hintEmpty:true});m.textContent='きいろの へやを かぞえてね'},
     reveal:()=>{slotSet(g,0,need);const r=rT.slots[0];r.classList.remove('pending');r.classList.add('filled','ten');r.textContent='10';draw([[T,'r'],[need,'b']],[[rest,'b']],{pop:'b'})}});
   function step2(){
-    HP.close();
+    HP.close();stepTo(1);arrow.remove();
     if(mem)slotHide(g,0);
-    slotNow(g,1);focus(g);
-    setQ(mem?`あおい ${G}を、さっきの かずと □に わけるよ。 □は いくつ？`:`あおい ${G}を、${need}と □に わけるよ。 □は いくつ？`,
-         mem?`あおい ${G}を、さっきの かずと なにに わけるよ。 なには いくつ`:`あおい ${G}を、${need}と なにに わけるよ。 なには いくつ`,'make2');
-    ask(rest,0,10,`${G}は ${need}と ${rest}に わかれたね！`,m=>{total+=m;step3()},{
-      hint:m=>{m.textContent='あおい まるを '+need+'こ うつしたよ。 のこった あおい まるを かぞえてね'},
+    g.slots[1].classList.remove('later');slotNow(g,1);
+    setQ(mem?`あおい ${G}は さっきの かずと いくつ？`:`あおい ${G}は ${need}と いくつ？`,
+         mem?`あおい ${G}は、さっきの かずと いくつに わけられる`:`あおい ${G}は、${need}と いくつに わけられる`,'make2');
+    ask(rest,0,10,`${G}は ${need}と ${rest}！`,m=>{total+=m;step3()},{
+      hint:m=>{m.textContent='のこった あおい まるは？'},
       reveal:()=>{slotSet(g,1,rest);if(mem)g.slots[0].textContent=need}});
   }
   function step3(){
-    HP.close();
+    HP.close();stepTo(2);
     if(mem){slotHide(g,0);slotHide(g,1)}
-    focus(null);g.slots[1].classList.add('now');rT.slots[0].classList.add('now');
-    setQ(mem?'あかの「10」と、さくらんぼの みぎの かずで、ぜんぶで いくつ？':`あかの 10と、あおの ${rest}で、ぜんぶで いくつ？`,'','make3');
-    ask(10+rest,10,18,`10と ${rest}で ${10+rest}！ 10を つくれたね`,m=>{total+=m;done(total,`${a}+${b}`)},{
+    g.slots[1].classList.add('now');rT.slots[0].classList.add('now');
+    setQ(mem?'10と みぎの まるで いくつ？':`10と ${rest}で いくつ？`,'','make3');
+    ask(10+rest,10,18,`10と ${rest}で ${10+rest}！`,m=>{total+=m;done(total,`${a}+${b}`)},{
       hint:m=>{m.textContent='10の つぎは 11、12…'},
       reveal:()=>{g.slots[1].classList.remove('now');rT.slots[0].classList.remove('now');slotSet(g,0,need);slotSet(g,1,rest);setAns(e,a+b)}});
   }
 }
 
 /* 5: くりさがり（減加法）. 13−5: 13 = 10 と 3（赤のさくらんぼ）→ 10 から 5 をとる（青の下に「のこり」）
-   → のこり と 3 をあわせる. 赤と青のさくらんぼは最後まで表示したまま. */
+   → のこり と 3 をあわせる. 青の「のこり」は step2 から出し、最後まで赤と一緒に表示. */
 function qBorrow(){
   const L=lvl();let a,b;
   if(L===0){a=rnd(11,12);b=9}
@@ -692,7 +751,7 @@ function qBorrow(){
   const tA={t:a,c:'r',cherry:['10','?']};
   const tB={t:b,c:'b',stem:'のこり'};
   const e=EQ([tA,{t:'−',op:true},tB,{t:'=',op:true},{t:'?'}]);ST.appendChild(e);
-  // hint panel: a pack of 10 + loose ones
+  tB.stemEl.classList.add('later');
   const draw=(taken,opt={})=>{
     const f=el('div','frames two');
     const p=el('div','pack'),l=el('div','pack');
@@ -701,38 +760,38 @@ function qBorrow(){
     f.append(p,l);HP.set(f);
   };
   draw(false);
-  slotNow(tA,1);tA.el.classList.add('focus');
-  setQ(`あかい ${a}は、10と いくつに わけられる？`,`${a} ひく ${b}。 あかい ${a}は、10と いくつに わけられる`,'borrow1');
+  slotNow(tA,1);stepTo(0);
+  setQ(`あかい ${a}は 10と いくつ？`,`${a} ひく ${b}。 あかい ${a}は、10と いくつに わけられる`,'borrow1');
   ask(ones,0,10,`${a}は 10と ${ones}！`,m=>{total+=m;step2()},{
-    hint:m=>{m.textContent='10の わくの となりに、まるは いくつ ある？'},
+    hint:m=>{m.textContent='10の となりの まるは？'},
     reveal:()=>{knowOnes=true;slotSet(tA,1,ones);draw(false)}});
   function step2(){
-    HP.close();
+    HP.close();stepTo(1);
     if(mem)slotHide(tA,1);
-    tA.slots[0].classList.add('now');slotNow(tB,0);tA.el.classList.remove('focus');tB.el.classList.add('focus');
-    setQ(mem?`さくらんぼの みぎの かずからは ${b}は とれないね。 あおい ${b}を 10から とると、いくつ のこる？`
-            :`${ones}から ${b}は とれないね。 あおい ${b}を 10から とると、いくつ のこる？`,'','borrow2');
+    tB.stemEl.classList.remove('later');
+    tA.slots[0].classList.add('now');slotNow(tB,0);
+    setQ(`10から あおい ${b}を とると？`,`あおい ${b}を、10から とると、いくつ のこる`,'borrow2');
     ask(left,0,10,`10から ${b} とって ${left}！`,m=>{total+=m;step3()},{
-      hint:m=>{draw(true);m.textContent='×の ついていない あかい まるを かぞえてね'},
+      hint:m=>{draw(true);m.textContent='×じゃない あかい まるは？'},
       reveal:()=>{tA.slots[0].classList.remove('now');slotSet(tB,0,left);draw(true,{pop:'x'})}});
   }
   function step3(){
-    HP.close();
+    HP.close();stepTo(2);
     if(mem){slotHide(tA,1);slotHide(tB,0)}
-    tB.el.classList.remove('focus');tA.slots[1].classList.add('now');tB.slots[0].classList.add('now');
-    setQ(mem?'あおの したの「のこり」と、さくらんぼの みぎの かずを あわせると いくつ？':`のこりの ${left}と、${ones}を あわせると いくつ？`,'','borrow3');
-    ask(ans,0,10,`${left}と ${ones}で ${ans}！ 10から とれたね`,m=>{total+=m;done(total,`${a}−${b}`)},{
-      hint:m=>{draw(true);m.textContent='×の ついていない あかい まるを ぜんぶ かぞえてね'},
+    tA.slots[1].classList.add('now');tB.slots[0].classList.add('now');
+    setQ(mem?'のこりと みぎの まるで いくつ？':`${left}と ${ones}で いくつ？`,'','borrow3');
+    ask(ans,0,10,`${left}と ${ones}で ${ans}！`,m=>{total+=m;done(total,`${a}−${b}`)},{
+      hint:m=>{draw(true);m.textContent='×じゃない あかい まるを ぜんぶ'},
       reveal:()=>{slotSet(tA,1,ones);slotSet(tB,0,left);setAns(e,ans)}});
   }
 }
 
 function confirmQuit(){
   const v=el('div','veil');const d=el('div','dialog sketch');
-  d.append(el('div','bear',bearSVG('think')),el('p','q','やめる？'));
+  d.append(el('div','bear',bearSVG('think')),el('p','q','やめる？'),el('p','qsub','つぎは つづきから できるよ'));
   const row=el('div','row');
   const keep=el('button','pbtn','つづける');keep.id='keep';keep.onclick=()=>v.remove();
-  const stop=el('button','pbtn sub','やめる');stop.id='stop';stop.onclick=()=>{v.remove();try{speechSynthesis.cancel()}catch(e){}home()};
+  const stop=el('button','pbtn sub','やめる');stop.id='stop';stop.onclick=()=>{v.remove();try{speechSynthesis.cancel();if(curAudio)curAudio.pause()}catch(e){}home()};
   row.append(keep,stop);d.appendChild(row);v.appendChild(d);document.body.appendChild(v);
 }
 
@@ -742,7 +801,7 @@ function finish(){
   let t=today();
   if(!t){t={date:todayStr(),rounds:[]};S.days.push(t)}
   t.rounds.push({mode:R.mode,first:R.first,n:R.n,facts:[...new Set(R.facts)]});
-  save();
+  S.resume=null;save();
   const opened=MODES.filter(m=>openSet().includes(m.id)&&!before.includes(m.id));
   topbar('');card.innerHTML='';
   const c=el('div','center');
@@ -840,6 +899,32 @@ function parentView(){
     const lb=el('label','');const r=el('input');r.type='radio';r.name='cherry';r.id='cherry-'+v;r.value=v;r.checked=(S.cherryMode||'auto')===v;
     r.onchange=()=>{S.cherryMode=v;save()};lb.append(r,document.createTextNode(t));rd.appendChild(lb)});
   p.appendChild(rd);
+  const tg2=el('label','toggle');const cb2=el('input');cb2.type='checkbox';cb2.id='sfx';cb2.checked=S.sfx!==false;
+  cb2.onchange=()=>{S.sfx=cb2.checked;save();sfx('ok')};
+  tg2.append(cb2,document.createTextNode('正解・まちがいの効果音を鳴らす'));p.appendChild(tg2);
+  // C3: current difficulty per problem
+  const LV=['','やさしい','ふつう','むずかしい'];
+  const st=el('div','pstat','<b>いまの難しさ（自動で調整されます）</b>');const tb=el('table','ptable');
+  MODES.forEach((m,i)=>{const tr=el('tr','');const memNote=MEM_MODES.includes(m.id)?((S.cherryMode||'auto')==='auto'?((S.level[m.id]>=3&&((S.memStreak||{})[m.id]||0)>=2)?'数字を隠し中':'数字は表示'):(S.cherryMode==='hide'?'数字を隠す':'数字は表示')):'';
+    tr.innerHTML=`<td>${i+1}. ${m.title}</td><td>${isOpen(i)?LV[S.level[m.id]]:'まだ開いていない'}</td><td>${memNote}</td>`;tb.appendChild(tr)});
+  st.appendChild(tb);p.appendChild(st);
+  // B5: storage safety + backup
+  const standalone=navigator.standalone===true||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);
+  const bk=el('div','pbackup','<b>記録のバックアップ</b>');
+  if(!standalone)bk.appendChild(el('p','warn','⚠ ホーム画面のアイコンから開いていません。iPadのSafariは、7日間使わなかったサイトの記録を消すことがあります。Safariの共有ボタン →「ホーム画面に追加」で追加し、そこから開いてください。'));
+  bk.appendChild(el('p','','記録（シール・はなまる・難しさ）を文字のかたまりにして控えておけます。メモアプリやLINEのKeepなどに貼って保存してください。'));
+  const out=el('textarea','code');out.id='backup-out';out.readOnly=true;out.rows=3;out.placeholder='「記録をコピー」を押すとここに出ます';
+  const cp=el('button','pbtn sub small','記録をコピー');cp.id='backup-copy';
+  cp.onclick=()=>{const code=btoa(unescape(encodeURIComponent(JSON.stringify(Object.assign({},S,{offset:undefined})))));out.value=code;out.select();
+    try{navigator.clipboard.writeText(code).then(()=>{cp.textContent='コピーしました'},()=>{cp.textContent='上の文字を長押しでコピー'})}catch(e){cp.textContent='上の文字を長押しでコピー'}};
+  const inp=el('textarea','code');inp.id='backup-in';inp.rows=3;inp.placeholder='控えておいた文字をここに貼り付け';
+  const msg=el('p','pmsg','');
+  const rs=el('button','pbtn sub small','この記録にもどす');rs.id='backup-restore';
+  rs.onclick=()=>{let d;try{d=JSON.parse(decodeURIComponent(escape(atob(inp.value.trim()))))}catch(e){msg.textContent='文字が正しくありません。コピーした文字をそのまま貼り付けてください。';return}
+    if(!d||!Array.isArray(d.days)){msg.textContent='記録の形が正しくありません。';return}
+    if(rs.dataset.armed!=='1'){rs.dataset.armed='1';rs.textContent='本当にもどす（今の記録は上書き）';msg.textContent='シール '+d.days.filter(x=>x.sticker).length+'枚の記録です。もう一度押すと、今の記録と入れかわります。';return}
+    S=Object.assign({level:{},days:[],voice:true},d);MODES.forEach(m=>{if(!S.level[m.id])S.level[m.id]=1});save();msg.textContent='記録をもどしました。';rs.dataset.armed='';rs.textContent='この記録にもどす'};
+  bk.append(cp,out,inp,rs,msg);p.appendChild(bk);
   const ex=el('div','');ex.id='parent-extra';p.appendChild(ex);demoPanel(ex);
   card.appendChild(p);
   const back=el('button','pbtn sub','もどる');back.id='parent-back';back.onclick=home;
