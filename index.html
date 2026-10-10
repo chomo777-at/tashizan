@@ -175,6 +175,8 @@ button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
   .tiles{grid-template-columns:1fr}
   .tile{min-height:76px}
 }
+#card .nextbtn{display:block;margin:clamp(14px,2.4vh,24px) auto 0;font-size:clamp(1.3rem,3.8vmin,1.9rem);padding:12px 40px;animation:popin .35s ease}
+@keyframes popin{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -241,10 +243,22 @@ function choices(ans,lo=0,hi=10){
 }
 function el(tag,cls,html){const e=document.createElement(tag);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e}
 
-/* ---------- voice (iPad: Japanese system voice) ---------- */
-let lastSay='';
+/* ---------- voice ----------
+   Recorded human-voice clips (voice/NN.m4a) are used when listed in CLIPS; anything else falls back
+   to the iPad's system voice. On-screen text keeps the numbers; the clips are number-free prompts. */
+const CLIPS={/* filled when recordings arrive, e.g. see:'voice/01.m4a' */};
+let lastSay='',lastClip='',curAudio=null;
+function playClip(id,fallback){
+  lastClip=id;lastSay=fallback;
+  if(!S.voice)return;
+  const url=CLIPS[id];
+  if(!url){say(fallback);return}
+  try{speechSynthesis.cancel()}catch(e){}
+  try{if(curAudio){curAudio.pause()}curAudio=new Audio(url);curAudio.play().catch(()=>say(fallback))}catch(e){say(fallback)}
+}
+function replay(){if(lastClip&&CLIPS[lastClip])playClip(lastClip,lastSay);else say(lastSay)}
 function say(t){
-  if(!t)return;lastSay=t;
+  if(!t)return;
   if(!S.voice)return;
   try{
     const s=t.replace(/−/g,' ひく ').replace(/\+/g,' たす ').replace(/=/g,' は ').replace(/[?？]/g,'').replace(/□/g,'なに');
@@ -288,8 +302,7 @@ function bearSVG(mood='normal'){
 function coach(mood,text,speak=true){
   const c=el('div','coach');
   const b=el('div','bear',bearSVG(mood));const bb=el('div','bubble');bb.textContent=text||'';
-  c.append(b,bb);c.set=(m,t,cls='')=>{b.innerHTML=bearSVG(m);b.classList.remove('bounce');void b.offsetWidth;b.classList.add('bounce');bb.className='bubble '+cls;bb.textContent=t;say(t)};
-  if(text&&speak)say(text);
+  c.append(b,bb);c.set=(m,t,cls='')=>{b.innerHTML=bearSVG(m);b.classList.remove('bounce');void b.offsetWidth;b.classList.add('bounce');bb.className='bubble '+cls;bb.textContent=t};
   return c;
 }
 
@@ -302,7 +315,7 @@ function topbar(kind){
   }else if(kind==='q'){
     const h=el('button','ibtn','🏠');h.id='quit';h.setAttribute('aria-label','やめる');h.onclick=confirmQuit;
     const p=el('div','prog');for(let k=0;k<R.n;k++)p.appendChild(el('i',k<R.i?'d':''));
-    const s=el('button','ibtn','🔊');s.id='speak';s.setAttribute('aria-label','もういちど きく');s.onclick=()=>say(lastSay);
+    const s=el('button','ibtn','🔊');s.id='speak';s.setAttribute('aria-label','もういちど きく');s.onclick=replay;
     top_.append(h,p,s);
   }else{
     const h=el('button','ibtn','🏠');h.id='home-btn';h.setAttribute('aria-label','もどる');h.onclick=home;
@@ -404,10 +417,10 @@ function next(){
   SD.append(QT,AR,CO);qs.append(ST,SD);card.appendChild(qs);
   ({see:qSee,ten:qTen,add10:qAdd10,sub10:qSub10,make:qMake,borrow:qBorrow})[R.mode]();
 }
-function setQ(t,prefix=''){QT.textContent=t;say((prefix?prefix+'。 ':'')+t)}
+function setQ(t,prefix='',clip=''){QT.textContent=t;playClip(clip,(prefix?prefix+'。 ':'')+t)}
 function eqText(e){return e.textContent}
 // ask: praise names the strategy, not the child
-function ask(ans,lo,hi,praise,onOk,hintFn,yayFrames){
+function ask(ans,lo,hi,praise,onOk,hintFn,yayFrames,reveal){
   AR.innerHTML='';const box=el('div','answers');let miss=0;
   choices(ans,lo,hi).forEach((v,k)=>{
     const b=el('button','abtn',v);b.type='button';b.id='ans-'+k;
@@ -415,8 +428,11 @@ function ask(ans,lo,hi,praise,onOk,hintFn,yayFrames){
       if(v===ans){
         b.classList.add('ok');box.querySelectorAll('button').forEach(x=>x.disabled=true);
         CO.set(miss===0?'cheer':'happy',miss===0?praise:'みなおして わかったね！','good');
+        if(reveal)reveal();
         if(yayFrames){yayFrames.classList.remove('yay');void yayFrames.offsetWidth;yayFrames.classList.add('yay')}
-        setTimeout(()=>{if(document.body.contains(box))onOk(miss)},1300);
+        const nx=el('button','pbtn nextbtn','つぎへ ▶');nx.type='button';nx.id='next';
+        nx.onclick=()=>{nx.disabled=true;onOk(miss)};
+        AR.appendChild(nx);
       }else{
         miss++;b.classList.remove('no');void b.offsetWidth;b.classList.add('no');
         const box2={textContent:'おしい！ よく みてみよう'};
@@ -433,7 +449,7 @@ function qSee(){
   const L=lvl();
   const n=L===0?rnd(1,5):L===1?rnd(2,6):L===2?rnd(3,8):rnd(3,10);
   const fh=el('div','frames hidebox');fh.appendChild(frameG([[n,'r']]));ST.appendChild(fh);
-  setQ('ぱっと みて！ いくつ？');
+  setQ('ぱっと みて！ いくつ？','','see');
   const t=setTimeout(()=>{fh.innerHTML='<span class="peek">？</span>'},3000);
   const praise=n>5?'5と '+(n-5)+'で '+n+'！ よく みたね':'かたちで わかったね！';
   ask(n,1,10,praise,miss=>{clearTimeout(t);done(miss,String(n))},msg=>{
@@ -447,8 +463,8 @@ function qTen(){
   const n=L===0?pick([9,5]):L===1?pick([9,1,5]):L===2?pick([8,2,7,3,9,1]):rnd(1,9);
   const e=el('div','eq',`<span class="r">${n}</span> と □ で 10`);ST.appendChild(e);
   const fh=el('div','frames');fh.appendChild(frameG([[n,'r']]));ST.appendChild(fh);
-  setQ('あと いくつで 10？',eqText(e));
-  ask(10-n,0,10,`${n}と ${10-n}で 10を つくれたね！`,miss=>setTimeout(()=>done(miss,`${n}と${10-n}`),300),msg=>{
+  setQ('あと いくつで 10？',eqText(e),'ten');
+  ask(10-n,0,10,`${n}と ${10-n}で 10を つくれたね！`,miss=>done(miss,`${n}と${10-n}`),msg=>{
     fh.innerHTML='';fh.appendChild(frameG([[n,'r']],{hintEmpty:true}));
     msg.textContent='きいろの へやは いくつ？';
   },fh);
@@ -465,11 +481,11 @@ function qAdd10(){
   const s=a+b;
   const e=el('div','eq',`<span class="r">${a}</span> <span class="op">+</span> <span class="b">${b}</span> = ?`);ST.appendChild(e);
   const fh=el('div','frames');fh.appendChild(frameG([[a,'r'],[b,'b']]));ST.appendChild(fh);
-  setQ('あわせて いくつ？',eqText(e));
+  setQ('あわせて いくつ？',eqText(e),'sum');
   const praise=s===10?'10が できたね！':s>5?`5と ${s-5}で ${s}！ よく みたね`:'かたちで わかったね！';
-  ask(s,1,10,praise,miss=>{e.innerHTML=`<span class="r">${a}</span> <span class="op">+</span> <span class="b">${b}</span> = ${s}`;setTimeout(()=>done(miss,`${a}+${b}`),300)},msg=>{
+  ask(s,1,10,praise,miss=>done(miss,`${a}+${b}`),msg=>{
     msg.textContent=s>5?'うえの だんは 5。 したの だんは？':'あかと あおを あわせると？';
-  },fh);
+  },fh,()=>{e.innerHTML=`<span class="r">${a}</span> <span class="op">+</span> <span class="b">${b}</span> = ${s}`});
 }
 
 function qSub10(){
@@ -481,14 +497,11 @@ function qSub10(){
   const ans=a-b;
   const e=el('div','eq',`<span class="r">${a}</span> <span class="op">−</span> <span class="b">${b}</span> = ?`);ST.appendChild(e);
   const fh=el('div','frames');fh.appendChild(frameG([[ans,'r'],[b,'x']],{pop:'x'}));ST.appendChild(fh);
-  setQ('のこりは いくつ？',eqText(e));
+  setQ('のこりは いくつ？',eqText(e),'left');
   const praise=a===10?`${ans}と ${b}で 10 だね！`:`${ans}と ${b}で ${a}！ よく みたね`;
-  ask(ans,0,10,praise,miss=>{
-    e.innerHTML=`<span class="r">${a}</span> <span class="op">−</span> <span class="b">${b}</span> = ${ans}`;
-    setTimeout(()=>done(miss,`${a}−${b}`),300);
-  },msg=>{
+  ask(ans,0,10,praise,miss=>done(miss,`${a}−${b}`),msg=>{
     msg.textContent=ans>=5?'のこっている あかい まるは？ うえの だんは 5':'のこっている あかい まるは？';
-  },fh);
+  },fh,()=>{e.innerHTML=`<span class="r">${a}</span> <span class="op">−</span> <span class="b">${b}</span> = ${ans}`});
 }
 
 /* make-ten: the bigger number becomes 10. Frames stay in the same order as the equation; the "10" frame glows */
@@ -511,22 +524,20 @@ function qMake(){
     if(tFirst)fh.append(tf,gf);else fh.append(gf,tf);
   };
   draw([[T,tc]],[[G,gc]]);
-  setQ(`${T}は あと いくつで 10？`,eqText(e));
+  setQ(`${T}は あと いくつで 10？`,eqText(e),'ten');
   ask(need,0,10,`10まで あと ${need}だね！`,m=>{total+=m;step2()},msg=>{
     draw([[T,tc]],[[G,gc]],{hintEmpty:true});
     msg.textContent='きいろの へやを かぞえてね';
   });
   function step2(){
     draw([[T,tc],[need,gc]],[[rest,gc]],{pop:gc});
-    setQ(`${G}から ${need}こ うつしたよ。 のこりは？`);
+    setQ(`${G}から ${need}こ うつしたよ。 のこりは？`,'','moved');
     ask(rest,0,10,`${G}を ${need}と ${rest}に わけたね！`,m=>{total+=m;step3()},msg=>{msg.textContent='10に ならなかった ほうの わくを みてね'});
   }
   function step3(){
-    setQ(`10と ${rest}で いくつ？`);
-    ask(10+rest,10,18,`10と ${rest}で ${10+rest}！ 10を つくれたね`,m=>{
-      total+=m;e.innerHTML=`<span class="r">${a}</span> <span class="op">+</span> <span class="b">${b}</span> = ${a+b}`;
-      setTimeout(()=>done(total,`${a}+${b}`),300);
-    },msg=>{msg.textContent='10の つぎは 11、12…'},fh);
+    setQ(`10と ${rest}で いくつ？`,'','sum');
+    ask(10+rest,10,18,`10と ${rest}で ${10+rest}！ 10を つくれたね`,m=>{total+=m;done(total,`${a}+${b}`)},
+      msg=>{msg.textContent='10の つぎは 11、12…'},fh,()=>{e.innerHTML=`<span class="r">${a}</span> <span class="op">+</span> <span class="b">${b}</span> = ${a+b}`});
   }
 }
 
@@ -541,7 +552,7 @@ function qBorrow(){
   const e=el('div','eq',`<span class="r">${a}</span> <span class="op">−</span> <span class="b">${b}</span> = ?`);ST.appendChild(e);
   const fh=el('div','frames two');ST.appendChild(fh);
   fh.append(frameG([[10,'r']],{target:true}),frameG([[ones,'r']]));
-  setQ(`${ones}から ${b}は とれない。 10から ${b}を とると？`,eqText(e));
+  setQ(`${ones}から ${b}は とれない。 10から ${b}を とると？`,eqText(e),'borrow');
   setTimeout(()=>{if(!card.contains(fh))return;fh.firstChild.replaceWith(frameG([[left,'r'],[b,'x']],{pop:'x',target:true}))},900);
   ask(left,0,10,`10から ${b} とって ${left}！`,m=>{total+=m;step2()},msg=>{
     fh.innerHTML='';fh.append(frameG([[left,'r'],[b,'x']],{target:true}),frameG([[ones,'r']]));
@@ -549,11 +560,9 @@ function qBorrow(){
   });
   function step2(){
     fh.innerHTML='';fh.append(frameG([[left,'r'],[b,'x']]),frameG([[ones,'r']]));
-    setQ(`${left}と ${ones}で いくつ？`);
-    ask(ans,0,10,`${left}と ${ones}で ${ans}！ 10から とれたね`,m=>{
-      total+=m;e.innerHTML=`<span class="r">${a}</span> <span class="op">−</span> <span class="b">${b}</span> = ${ans}`;
-      setTimeout(()=>done(total,`${a}−${b}`),300);
-    },msg=>{msg.textContent='あかい まるを ぜんぶ あわせると？'},fh);
+    setQ(`${left}と ${ones}で いくつ？`,'','sum');
+    ask(ans,0,10,`${left}と ${ones}で ${ans}！ 10から とれたね`,m=>{total+=m;done(total,`${a}−${b}`)},
+      msg=>{msg.textContent='あかい まるを ぜんぶ あわせると？'},fh,()=>{e.innerHTML=`<span class="r">${a}</span> <span class="op">−</span> <span class="b">${b}</span> = ${ans}`});
   }
 }
 
@@ -578,7 +587,6 @@ function finish(){
   const c=el('div','center');
   const f=[...new Set(R.facts)].slice(0,4);
   let line='5もん さいごまで できたね！';
-  if(f.length)line+=' きょう わかったのは '+f.join('、');
   {const h=coach('cheer',line);h.classList.add('hero');c.appendChild(h)}
   if(R.first>=CLEAR_AT)c.appendChild(el('div','clear','⭐ クリア！ ひとりで '+R.first+'もん'));
   if(opened.length)c.appendChild(el('div','banner','🔓 あたらしい もんだいが ひらいたよ！「'+opened[0].title+'」'));
@@ -656,7 +664,7 @@ function parentView(){
   topbar('おうちの方へ');card.innerHTML='';
   const p=el('div','parent sketch');p.style.padding='18px 20px';
   p.innerHTML=`<h2>使い方</h2><ul>
-  <li>1回5問・1〜2分。終わると毎日1枚、点数に関係なくシールを選んで貼れます（1日1枚まで）。</li>
+  <li>1回5問・2〜3分。正解したら「つぎへ」ボタンで次に進みます。終わると毎日1枚、点数に関係なくシールを選んで貼れます（1日1枚まで）。</li>
   <li>1問目と5問目はかんたんな問題。間違いが続くと自動でやさしくなります。</li>
   <li>6つの問題は、1つ前の問題を別々の日に2回「クリア」（5問中4問以上をひとりで正解）すると順に開きます。</li>
   <li>すごろくの貼ったマスをタップすると、その日にできた問題が見られ、「はなまる」を押せます。</li>
@@ -664,7 +672,7 @@ function parentView(){
   <li>iPadでは「設定 → アクセシビリティ → アクセスガイド」をオンにすると、勉強中にほかのアプリへ移れなくなります。</li></ul>`;
   const tg=el('label','toggle');const cb=el('input');cb.type='checkbox';cb.id='voice';cb.checked=!!S.voice;
   cb.onchange=()=>{S.voice=cb.checked;save();if(cb.checked)say('よみあげ を オンに したよ')};
-  tg.append(cb,document.createTextNode('問題を声で読み上げる（🔊ボタンでもう一度聞けます）'));
+  tg.append(cb,document.createTextNode('問題文を声で読み上げる（🔊ボタンでもう一度聞けます）'));
   p.appendChild(tg);
   const ex=el('div','');ex.id='parent-extra';p.appendChild(ex);
   card.appendChild(p);
