@@ -283,8 +283,9 @@ function el(tag,cls,html){const e=document.createElement(tag);if(cls)e.className
 /* ---------- voice ----------
    Recorded human-voice clips (voice/NN.m4a) are used when listed in CLIPS; anything else falls back
    to the iPad's system voice. On-screen text keeps the numbers; the clips are number-free prompts. */
-const CLIPS={see:'/tashizan/voice/01.mp3',ten:'/tashizan/voice/02.mp3',sum:'/tashizan/voice/03.mp3',left:'/tashizan/voice/04.mp3'
-  /* 4・5段階の新しい問いかけ（make1-3 / borrow1-3）は録音待ち。届くまではiPadの音声で読む */};
+const CLIPS={see:'/tashizan/voice/01.mp3',ten:'/tashizan/voice/02.mp3',sum:'/tashizan/voice/03.mp3',left:'/tashizan/voice/04.mp3',
+  make1:'/tashizan/voice/07.mp3',make2:'/tashizan/voice/08.mp3',make3:'/tashizan/voice/09.mp3',
+  borrow1:'/tashizan/voice/10.mp3',borrow2:'/tashizan/voice/11.mp3',borrow3:'/tashizan/voice/12.mp3'};
 let lastSay='',lastClip='',curAudio=null;
 function playClip(id,fallback){
   lastClip=id;lastSay=fallback;
