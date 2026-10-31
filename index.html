@@ -232,7 +232,11 @@ button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
 /* v14 */
 .abtn.wrong{opacity:.32;position:relative;box-shadow:none}
 .abtn.wrong::after{content:"×";position:absolute;right:8%;top:2%;font-size:.5em;color:var(--red)}
-.slot.later,.cherry.later{visibility:hidden}
+.slot.later,.cherry.later,.underrow.later{visibility:hidden}
+.rvtag{align-self:center;font-family:var(--round);font-size:.85rem;color:var(--soft);border:2px dashed var(--line);border-radius:999px;padding:1px 12px;margin-bottom:2px}
+.underrow{display:flex;justify-content:flex-start;margin-top:.22em}
+.slot.struck{position:relative;color:var(--soft)}
+.slot.struck::after{content:'';position:absolute;left:8%;right:8%;top:50%;border-top:.12em solid var(--red);transform:rotate(-38deg)}
 .homehead{display:flex;flex-direction:column;gap:10px}
 .sdots{display:flex;gap:10px;justify-content:center;min-height:16px}
 .sdots i{width:16px;height:16px;border-radius:50%;border:2.5px solid var(--line);background:var(--card)}
@@ -269,6 +273,7 @@ button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
 <script>
 const card=document.getElementById('card'), top_=document.getElementById('top');
 const KEY='sosuke-tashizan-v2';
+const SRC=/demo/.test(KEY)?'demo':'prod'; // バックアップに付ける「どちらの記録か」
 // order = unlock order. A mode opens when the previous one was cleared (4+/5 first-try) on 2 different days
 const MODES=[
   {id:'see',   title:'ぱっと みて いくつ？', icon:[[7,'r']]},
@@ -281,7 +286,8 @@ const MODES=[
 const MODE_NAME=Object.fromEntries(MODES.map(m=>[m.id,m.title]));
 const NEED_DAYS=2, CLEAR_AT=4;
 function clearDays(id){return new Set(S.days.filter(d=>d.rounds&&d.rounds.some(r=>r.mode===id&&r.first>=CLEAR_AT)).map(d=>d.date)).size}
-function isOpen(i){return i===0||S.allOpen||clearDays(MODES[i-1].id)>=NEED_DAYS}
+// P1-②: おうちの方が ⚙︎ で開いた問題（S.manualOpen）も開く. 永久に進めない状態を作らないため
+function isOpen(i){return i===0||S.allOpen||clearDays(MODES[i-1].id)>=NEED_DAYS||(Array.isArray(S.manualOpen)&&S.manualOpen.includes(MODES[i].id))}
 function openSet(){return MODES.filter((m,i)=>isOpen(i)).map(m=>m.id)}
 const ISLANDS=[
   {name:'はじまりの しま', add:['🐶','🐱','🚗','🚃','⚽','🍎','🌟','🦖']},
@@ -326,7 +332,7 @@ function el(tag,cls,html){const e=document.createElement(tag);if(cls)e.className
    to the iPad's system voice. On-screen text keeps the numbers; the clips are number-free prompts. */
 const CLIPS={see:'/tashizan/voice/01.mp3',ten:'/tashizan/voice/02.mp3',sum:'/tashizan/voice/03.mp3',left:'/tashizan/voice/04.mp3',
   make1:'/tashizan/voice/07.mp3',make2:'/tashizan/voice/08.mp3',make3:'/tashizan/voice/09.mp3',
-  borrow1:'/tashizan/voice/10b.mp3',borrow2:'/tashizan/voice/11b.mp3',borrow3:'/tashizan/voice/12.mp3'};
+  borrow1:'/tashizan/voice/10b.mp3',borrow2:'/tashizan/voice/11c.mp3',borrow3:'/tashizan/voice/12.mp3'};
 let lastSay='',lastClip='',curAudio=null;
 function playClip(id,fallback,onEnd){
   lastClip=id;lastSay=fallback;
@@ -486,7 +492,7 @@ function home(){
   const rs=S.resume&&S.resume.date===todayStr()&&MODES.some((m,i)=>m.id===S.resume.mode&&isOpen(i))?S.resume:null;
   if(rs){msg='「'+MODE_NAME[rs.mode]+'」の つづきから やる？';mood='normal'}
   const co=coach(mood,msg,false);
-  if(rs){const go=el('button','pbtn','つづきから（'+(rs.i+1)+'もんめ）');go.id='resume';go.onclick=()=>{R={mode:rs.mode,i:rs.i,n:rs.n,first:rs.first,missRun:rs.missRun,okRun:rs.okRun,facts:rs.facts||[]};next()};co.btn=go}
+  if(rs){const go=el('button','pbtn','つづきから（'+(rs.i+1)+'もんめ）');go.id='resume';go.onclick=()=>{R={mode:rs.mode,i:rs.i,n:rs.n,first:rs.first,missRun:rs.missRun,okRun:rs.okRun,facts:rs.facts||[],rv:Array.isArray(rs.rv)?rs.rv:null};next()};co.btn=go}
   if(t&&!t.sticker&&!co.btn){const go=el('button','pbtn sun','シールを えらぶ');go.id='go-sticker';go.onclick=stickerPick;co.btn=go}
   const head=el('div','homehead');head.appendChild(co);if(co.btn){const r=el('div','row');r.appendChild(co.btn);head.appendChild(r)}
   wrap.append(head,left,right);card.appendChild(wrap);
@@ -506,7 +512,8 @@ function qMiss(){if(Q&&Q.st.length)Q.st[Q.st.length-1]++}
 function qRecord(miss,fact,level){
   if(!Q)return;
   S.log=Array.isArray(S.log)?S.log:[];
-  S.log.push({d:todayStr(),m:R.mode,e:String(fact),lv:level,st:Q.st.slice(),h:Q.st.some(x=>x>0),mem:!!Q.mem,ok1:miss===0});
+  const rec={d:todayStr(),m:qm(),e:String(fact),lv:level,st:Q.st.slice(),h:Q.st.some(x=>x>0),mem:!!Q.mem,ok1:miss===0};if(isRv())rec.rv=true;
+  S.log.push(rec);
   Q=null;
 }
 function daysAgo(ds,n){const d=new Date();d.setDate(d.getDate()-n);const lim=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());return ds<lim}
@@ -529,11 +536,12 @@ function reviewTable(range){
   if(range==='all'&&S.logSum&&Object.keys(S.logSum).length)box.appendChild(el('p','note','※ 90日より前の分は、要約だけ残しています（下の表には入っていません）。'));
   if(!qs.length){box.appendChild(el('p','','この期間の記録はまだありません（この版から記録を始めています）。'));return box}
   const tb=el('table','ptable');
-  tb.innerHTML='<tr><th>問題</th><th>解いた数</th><th>ひとりで正解</th><th>数字を隠して<br>ひとりで正解</th></tr>';
+  tb.innerHTML='<tr><th>問題</th><th>解いた数<br><small>（うち復習）</small></th><th>ひとりで正解</th><th>数字を隠して<br>ひとりで正解</th></tr>';
   MODES.forEach(m=>{
     const a=qs.filter(q=>q.m===m.id);if(!a.length)return;
     const ok=a.filter(q=>q.ok1).length;const hid=a.filter(q=>q.mem);const hidOk=hid.filter(q=>q.ok1).length;
-    const tr=el('tr','');tr.innerHTML=`<td>${m.title}</td><td>${a.length}</td><td>${ok}（${pct(ok,a.length)}）</td><td>${MEM_MODES.includes(m.id)?(hid.length?hidOk+'/'+hid.length:'—'):'—'}</td>`;tb.appendChild(tr);
+    const nrv=a.filter(q=>q.rv).length;
+    const tr=el('tr','');tr.innerHTML=`<td>${m.title}</td><td>${a.length}${nrv?'（'+nrv+'）':''}</td><td>${ok}（${pct(ok,a.length)}）</td><td>${MEM_MODES.includes(m.id)?(hid.length?hidOk+'/'+hid.length:'—'):'—'}</td>`;tb.appendChild(tr);
   });
   box.appendChild(tb);
   MEM_MODES.forEach(id=>{
@@ -546,7 +554,7 @@ function reviewTable(range){
 }
 const OBS_TAGS=['説明できた','10や5の まとまりで考えた','指で数えた','丸（図）を思い浮かべた','うまく言えなかった'];
 const ASK_HINT={see:'「どうして その数だと 分かったの？」',ten:'「7と いくつで 10か、どうやって 分かった？」',add10:'「どうやって 分かった？」',sub10:'「どうやって 分かった？」',
-  make:'「どうやって 分かった？」→「10を つくるのに いくつ つかった？」',borrow:'「どうやって 分かった？」→「どこから いくつ とった？」'};
+  make:'「どうやって 分かった？」→「10を つくるのに いくつ つかった？」',borrow:'「どうやって 分かった？」→「10から いくつ ひいた？」'};
 function todayOne(){
   const box=el('div','pobs','<b>今日の1問（おうちの方へ・任意）</b>');
   const today_=(S.log||[]).filter(q=>q.d===todayStr());
@@ -578,9 +586,19 @@ try{compactLog()}catch(e){}
    after a correct answer as 答え合わせ. A wrong choice is disabled; after 2 misses the choices are re-rolled
    so the last remaining button can't be "found" by elimination. Any miss = not 「ひとりで」. */
 let R=null, ST=null, AR=null, CO=null, HP=null, SD=null, QS=null;
-function start(mode){R={mode,i:0,n:5,first:0,missRun:0,okRun:0,facts:[]};S.resume=null;next()}
+/* P1-③: 1問目と5問目（易しい枠）に、前に開いた問題を「やさしい」で出す（5問のまま）.
+   復習の問題では難しさ・おぼえて計算の段階は変えない. 最初の問題（ぱっと見）には前がないので、今までどおり易しい問題. */
+function reviewPlan(mode,n){
+  const idx=MODES.findIndex(m=>m.id===mode);const prev=MODES.slice(0,Math.max(0,idx)).map(m=>m.id);
+  const rv=Array(n).fill(null);if(!prev.length)return rv;
+  const sh=prev.slice().sort(()=>Math.random()-.5);
+  rv[0]=sh[0];rv[n-1]=sh.length>1?sh[1]:sh[0];return rv;
+}
+function start(mode){R={mode,i:0,n:5,first:0,missRun:0,okRun:0,facts:[]};R.rv=reviewPlan(mode,R.n);S.resume=null;next()}
 function easyQ(){return R.i===0||R.i===R.n-1}
-function lvl(){return easyQ()?0:S.level[R.mode]}
+function isRv(){return !!(R.rv&&R.rv[R.i])}
+function qm(){return isRv()?R.rv[R.i]:R.mode}   // この問題の種類
+function lvl(){return easyQ()?(isRv()?1:0):S.level[R.mode]}
 const MEM_MODES=['make','borrow'];
 function done(miss,fact){
   qRecord(miss,fact,lvl());
@@ -615,14 +633,15 @@ function stepTo(i){
 }
 function next(){
   if(R.i>=R.n)return finish();
-  S.resume={mode:R.mode,i:R.i,n:R.n,first:R.first,missRun:R.missRun,okRun:R.okRun,facts:R.facts,date:todayStr()};save();
-  R.steps={make:3,borrow:3}[R.mode]||1;qStart();
+  S.resume={mode:R.mode,i:R.i,n:R.n,first:R.first,missRun:R.missRun,okRun:R.okRun,facts:R.facts,rv:R.rv||null,date:todayStr()};save();
+  R.steps={make:3,borrow:3}[qm()]||1;qStart();
   topbar('q');card.innerHTML='';
   QS=el('div','qs');const main=el('div','qmain');
   ST=el('div','stage');SD=el('div','sdots');CO=coach('normal','',false);CO.classList.add('ask');AR=el('div','area');HP=hintPanel();
+  if(isRv())main.appendChild(el('div','rvtag','ふくしゅう'));
   main.append(ST,SD,CO,AR);QS.append(main,HP);card.appendChild(QS);
   stepTo(0);
-  ({see:qSee,ten:qTen,add10:qAdd10,sub10:qSub10,make:qMake,borrow:qBorrow})[R.mode]();
+  ({see:qSee,ten:qTen,add10:qAdd10,sub10:qSub10,make:qMake,borrow:qBorrow})[qm()]();
 }
 // the question is what ぽっけ says (keep it to one short line; the voice can say more)
 function setQ(t,speech,clip='',onEnd){CO.set('normal',t,'');playClip(clip,speech||t,onEnd)}
@@ -634,7 +653,10 @@ function EQ(tokens){
     if(tk.cherry){
       const c=el('div','cherry','<svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0 L22 30 M50 0 L78 30"/></svg>');
       const sl=el('div','slots');tk.slots=tk.cherry.map(v=>{const s=el('span','slot',String(v));sl.appendChild(s);return s});
-      c.appendChild(sl);d.appendChild(c);tk.cherryEl=c;
+      c.appendChild(sl);
+      // 教科書（東京書籍1年 p.78）と同じく、10から引いた「のこり」を 10の下に書く
+      if(tk.under){const ur=el('div','underrow later');const u=el('span','slot under','?');ur.appendChild(u);c.appendChild(ur);tk.slots.push(u);tk.underRow=ur}
+      d.appendChild(c);tk.cherryEl=c;
     }
     if(tk.stem){
       const c=el('div','cherry stem','<svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0 L50 30"/></svg>');
@@ -819,8 +841,9 @@ function qMake(){
   }
 }
 
-/* 5: くりさがり（減加法）. 13−5: 13 = 10 と 3（赤のさくらんぼ）→ 10 から 5 をとる（青の下に「のこり」）
-   → のこり と 3 をあわせる. 青の「のこり」は step2 から出し、最後まで赤と一緒に表示. */
+/* 5: くりさがり（減加法）. 教科書（東京書籍 あたらしいさんすう1「13 ひきざん」p.78〜79）にそろえる:
+   13−9: 13 を 10 と 3 にわける → 10 から 9 を ひくと 1（10を×で消し、10の下に 1 を書く）→ 1 と 3 で 4.
+   「ばらから ひけるか」の判断ステップは、ひける問題と混ざる段階（2年の予習）で入れる. */
 function qBorrow(){
   const L=lvl();let a,b;
   if(L===0){a=rnd(11,12);b=9}
@@ -828,10 +851,9 @@ function qBorrow(){
   else if(L===2){b=rnd(6,9);a=rnd(11,10+b-1)}
   else{b=rnd(2,9);a=rnd(11,Math.min(18,10+b-1))}
   const ones=a-10,left=10-b,ans=left+ones;let total=0,knowOnes=false;const mem=memMode();Q&&(Q.mem=mem);
-  const tA={t:a,c:'r',cherry:['10','?']};
-  const tB={t:b,c:'b',stem:'のこり'};
+  const tA={t:a,c:'r',cherry:['10','?'],under:true};
+  const tB={t:b,c:'b'};
   const e=EQ([tA,{t:'−',op:true},tB,{t:'=',op:true},{t:'?'}]);ST.appendChild(e);
-  tB.stemEl.classList.add('later');
   const draw=(taken,opt={})=>{
     const f=el('div','frames two');
     const p=el('div','pack'),l=el('div','pack');
@@ -843,26 +865,26 @@ function qBorrow(){
   slotNow(tA,1);stepTo(0);
   setQ(`あかい ${a}は 10と いくつ？`,`${a} ひく ${b}。 あかい ${a}は、10と いくつに わけられる`,'borrow1');
   ask(ones,0,10,`${a}は 10と ${ones}！`,m=>{total+=m;step2()},{
-    hint:m=>{m.textContent='10の となりの まるは？'},
+    hint:m=>{m.textContent='ばらの まるは いくつ？'},
     reveal:()=>{knowOnes=true;slotSet(tA,1,ones);draw(false)}});
   function step2(){
     HP.close();stepTo(1);
     if(mem)slotHide(tA,1);
-    tB.stemEl.classList.remove('later');
-    tA.slots[0].classList.add('now');slotNow(tB,0);
-    setQ(`10から あおい ${b}を とると？`,`あおい ${b}を、10から とると、いくつ のこる`,'borrow2');
-    ask(left,0,10,`10から ${b} とって ${left}！`,m=>{total+=m;step3()},{
+    tA.underRow.classList.remove('later');tB.el.classList.add('focus');
+    slotNow(tA,2);tA.slots[0].classList.add('now');
+    setQ(`10から あおい ${b}を ひくと？`,`あおい ${b}を、10から ひくと、いくつ`,'borrow2');
+    ask(left,0,10,`10から ${b} ひいて ${left}！`,m=>{total+=m;step3()},{
       hint:m=>{draw(true);m.textContent='×じゃない あかい まるは？'},
-      reveal:()=>{tA.slots[0].classList.remove('now');slotSet(tB,0,left);draw(true,{pop:'x'})}});
+      reveal:()=>{tA.slots[0].classList.remove('now');tA.slots[0].classList.add('struck');tB.el.classList.remove('focus');slotSet(tA,2,left);draw(true,{pop:'x'})}});
   }
   function step3(){
     HP.close();stepTo(2);
-    if(mem){slotHide(tA,1);slotHide(tB,0)}
-    tA.slots[1].classList.add('now');tB.slots[0].classList.add('now');
-    setQ(mem?'のこりと みぎの まるで いくつ？':`${left}と ${ones}で いくつ？`,'','borrow3');
+    if(mem){slotHide(tA,1);slotHide(tA,2)}
+    tA.slots[1].classList.add('now');tA.slots[2].classList.add('now');
+    setQ(mem?'のこりと ばらで いくつ？':`${left}と ${ones}で いくつ？`,'','borrow3');
     ask(ans,0,10,`${left}と ${ones}で ${ans}！`,m=>{total+=m;done(total,`${a}−${b}`)},{
       hint:m=>{draw(true);m.textContent='×じゃない あかい まるを ぜんぶ'},
-      reveal:()=>{slotSet(tA,1,ones);slotSet(tB,0,left);setAns(e,ans)}});
+      reveal:()=>{slotSet(tA,1,ones);slotSet(tA,2,left);setAns(e,ans)}});
   }
 }
 
@@ -965,8 +987,8 @@ function parentView(){
   const p=el('div','parent sketch');p.style.padding='18px 20px';
   p.innerHTML=`<h2>使い方</h2><ul>
   <li>1回5問・2〜3分。正解したら「つぎへ」ボタンで次に進みます。終わると毎日1枚、点数に関係なくシールを選んで貼れます（1日1枚まで）。</li>
-  <li>1問目と5問目はかんたんな問題。間違いが続くと自動でやさしくなります。</li>
-  <li>6つの問題は、1つ前の問題を別々の日に2回「クリア」（5問中4問以上をひとりで正解）すると順に開きます。</li>
+  <li>1問目と5問目は、前に開いた問題の「ふくしゅう」（やさしい難しさ）です。最初の問題だけは、かんたんな問題になります。間違いが続くと自動でやさしくなります。</li>
+  <li>6つの問題は、1つ前の問題を別々の日に2回「クリア」（5問中4問以上をひとりで正解）すると順に開きます。なかなか開かないときは、下の「問題を開く」でおうちの方が開けます。</li>
   <li>すごろくの貼ったマスをタップすると、その日にできた問題が見られ、「はなまる」を押せます。</li>
   <li>記録はこの端末のブラウザに保存されます。同じ端末・同じブラウザで使ってください。</li>
   <li>iPadでは「設定 → アクセシビリティ → アクセスガイド」をオンにすると、勉強中にほかのアプリへ移れなくなります。</li></ul>`;
@@ -988,6 +1010,18 @@ function parentView(){
   MODES.forEach((m,i)=>{const tr=el('tr','');const memNote=MEM_MODES.includes(m.id)?((S.cherryMode||'auto')==='auto'?((S.level[m.id]>=3&&((S.memStreak||{})[m.id]||0)>=2)?'数字を隠し中':'数字は表示'):(S.cherryMode==='hide'?'数字を隠す':'数字は表示')):'';
     tr.innerHTML=`<td>${i+1}. ${m.title}</td><td>${isOpen(i)?LV[S.level[m.id]]:'まだ開いていない'}</td><td>${memNote}</td>`;tb.appendChild(tr)});
   st.appendChild(tb);p.appendChild(st);
+  // P1-②: 手動で次の問題を開く（2回押しで確定）
+  const op=el('div','pstat','<b>問題を開く（おうちの方の判断で）</b>');const k=MODES.findIndex((m,i)=>!isOpen(i));
+  if(k<0)op.appendChild(el('p','note','すべての問題が開いています。'));
+  else{
+    const prev=MODES[k-1];
+    op.appendChild(el('p','note',`つぎは「${MODES[k].title}」です。開く条件：「${prev.title}」を別々の日に2回クリア（いま ${Math.min(clearDays(prev.id),NEED_DAYS)}/${NEED_DAYS}日）。長く開かず、お子さんの様子から先に進めてよいと判断したときだけ開いてください。開いた問題は元に戻せません。`));
+    const ob=el('button','pbtn sub small','「'+MODES[k].title+'」を開く');ob.id='open-next';
+    ob.onclick=()=>{if(ob.dataset.armed!=='1'){ob.dataset.armed='1';ob.textContent='もう一度押すと開きます';return}
+      S.manualOpen=Array.isArray(S.manualOpen)?S.manualOpen:[];S.manualOpen.push(MODES[k].id);save();parentView()};
+    op.appendChild(ob);
+  }
+  p.appendChild(op);
   // P1-①: ふりかえり（アプリが記録した事実）と 今日の1問（保護者の観察）
   const rv=el('div','pstat','<b>ふりかえり（アプリが記録した事実）</b>');
   rv.appendChild(el('p','note','正解の数だけで理解を決めつけず、下の「今日の1問」の観察とあわせて見てください。間違いが多いステップは、お子さんの様子を確かめるきっかけにしてください。'));
@@ -1002,15 +1036,16 @@ function parentView(){
   bk.appendChild(el('p','','記録（シール・はなまる・難しさ）を文字のかたまりにして控えておけます。メモアプリやLINEのKeepなどに貼って保存してください。'));
   const out=el('textarea','code');out.id='backup-out';out.readOnly=true;out.rows=3;out.placeholder='「記録をコピー」を押すとここに出ます';
   const cp=el('button','pbtn sub small','記録をコピー');cp.id='backup-copy';
-  cp.onclick=()=>{const code=btoa(unescape(encodeURIComponent(JSON.stringify(Object.assign({},S,{offset:undefined})))));out.value=code;out.select();
+  cp.onclick=()=>{const code=btoa(unescape(encodeURIComponent(JSON.stringify(Object.assign({},S,{offset:undefined,src:SRC})))));out.value=code;out.select();
     try{navigator.clipboard.writeText(code).then(()=>{cp.textContent='コピーしました'},()=>{cp.textContent='上の文字を長押しでコピー'})}catch(e){cp.textContent='上の文字を長押しでコピー'}};
   const inp=el('textarea','code');inp.id='backup-in';inp.rows=3;inp.placeholder='控えておいた文字をここに貼り付け';
   const msg=el('p','pmsg','');
   const rs=el('button','pbtn sub small','この記録にもどす');rs.id='backup-restore';
   rs.onclick=()=>{let d;try{d=JSON.parse(decodeURIComponent(escape(atob(inp.value.trim()))))}catch(e){msg.textContent='文字が正しくありません。コピーした文字をそのまま貼り付けてください。';return}
     if(!d||!Array.isArray(d.days)){msg.textContent='記録の形が正しくありません。';return}
+    if(SRC==='prod'&&d.src==='demo'){msg.textContent='これは おためし版の記録です。本番には もどせません。';return}
     if(rs.dataset.armed!=='1'){rs.dataset.armed='1';rs.textContent='本当にもどす（今の記録は上書き）';msg.textContent='シール '+d.days.filter(x=>x.sticker).length+'枚の記録です。もう一度押すと、今の記録と入れかわります。';return}
-    S=Object.assign({level:{},days:[],voice:true},d);if(!Array.isArray(S.log))S.log=[];if(!Array.isArray(S.obs))S.obs=[];MODES.forEach(m=>{if(!S.level[m.id])S.level[m.id]=1});S.schema=2;save();msg.textContent='記録をもどしました。';rs.dataset.armed='';rs.textContent='この記録にもどす'};
+    S=Object.assign({level:{},days:[],voice:true},d);delete S.src;if(SRC==='prod'){delete S.allOpen;delete S.offset}if(!Array.isArray(S.log))S.log=[];if(!Array.isArray(S.obs))S.obs=[];MODES.forEach(m=>{if(!S.level[m.id])S.level[m.id]=1});S.schema=2;save();msg.textContent='記録をもどしました。';rs.dataset.armed='';rs.textContent='この記録にもどす'};
   bk.append(cp,out,inp,rs,msg);p.appendChild(bk);
   const ex=el('div','');ex.id='parent-extra';p.appendChild(ex);
   card.appendChild(p);
