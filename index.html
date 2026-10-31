@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#FBF5E9">
-<link rel="apple-touch-icon" href="icon.png">
-<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon_leaf.png">
+<link rel="icon" href="icon_leaf.png">
 <title>たしざん</title>
 <style>img{max-width:100%}[hidden]{display:none!important}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head><body>
@@ -89,6 +89,8 @@ button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
 .coach{display:flex;align-items:flex-end;gap:10px;min-height:clamp(90px,14vmin,130px);width:100%;max-width:560px}
 .bear{flex:none;width:clamp(80px,13vmin,124px);transition:transform .3s}
 .bear svg{display:block;width:100%;height:auto}
+.bear img.chara{display:block;width:100%;height:auto;margin:0 auto;-webkit-user-drag:none;user-select:none;pointer-events:none}
+.coach.ask .bear{width:clamp(70px,14vmin,124px)}
 .bear.bounce{animation:bob .6s ease}
 @keyframes bob{30%{transform:translateY(-12px) rotate(-4deg)}60%{transform:translateY(0) rotate(3deg)}}
 .bubble{position:relative;flex:1;font-family:var(--hand);font-size:clamp(1.15rem,3.2vmin,1.6rem);line-height:1.45;background:var(--card);border:2.5px solid var(--ink);border-radius:var(--wob);padding:10px 16px;margin-bottom:22px;min-height:1.45em}
@@ -367,7 +369,13 @@ function say(t,onEnd){
   }catch(e){onEnd&&onEnd()}
 }
 
-/* ---------- the bear "ぽっけ" (original character) ---------- */
+/* ---------- 案内役「リーフ」（Geminiで作成したオリジナルキャラクター。家族が作成・選定） ----------
+   画像は /tashizan/chara/ に置く（normal・happy・cheer・think）. 読み込めないときは旧キャラ（くま）のSVGで代わりに表示 */
+const CHARA_NAME='リーフ';
+const CHARA={normal:'/tashizan/chara/leaf_normal.webp',happy:'/tashizan/chara/leaf_happy.webp',cheer:'/tashizan/chara/leaf_cheer.webp',think:'/tashizan/chara/leaf_think.webp'};
+try{Object.values(CHARA).forEach(u=>{const i=new Image();i.src=u})}catch(e){}
+function charaHTML(mood='normal'){const m=CHARA[mood]?mood:'normal';return `<img class="chara" src="${CHARA[m]}" alt="${CHARA_NAME}" draggable="false" onerror="if(this.parentNode)this.outerHTML=bearSVG('${m}')">`}
+/* 旧キャラ（くま）: 画像が読めないときの代わり */
 function bearSVG(mood='normal'){
   const ink='#4A3A2E',honey='#E3B27A',cream='#FFF1DC',sage='#A9C79A';
   const eyes={
@@ -401,8 +409,8 @@ function bearSVG(mood='normal'){
 }
 function coach(mood,text,speak=true){
   const c=el('div','coach');
-  const b=el('div','bear',bearSVG(mood));const bb=el('div','bubble');bb.textContent=text||'';
-  c.append(b,bb);c.set=(m,t,cls='')=>{b.innerHTML=bearSVG(m);b.classList.remove('bounce');void b.offsetWidth;b.classList.add('bounce');bb.className='bubble '+cls;bb.textContent=t};
+  const b=el('div','bear',charaHTML(mood));const bb=el('div','bubble');bb.textContent=text||'';
+  c.append(b,bb);c.set=(m,t,cls='')=>{b.innerHTML=charaHTML(m);b.classList.remove('bounce');void b.offsetWidth;b.classList.add('bounce');bb.className='bubble '+cls;bb.textContent=t};
   return c;
 }
 
@@ -890,7 +898,7 @@ function qBorrow(){
 
 function confirmQuit(){
   const v=el('div','veil');const d=el('div','dialog sketch');
-  d.append(el('div','bear',bearSVG('think')),el('p','q','やめる？'),el('p','qsub','つぎは つづきから できるよ'));
+  d.append(el('div','bear',charaHTML('think')),el('p','q','やめる？'),el('p','qsub','つぎは つづきから できるよ'));
   const row=el('div','row');
   const keep=el('button','pbtn','つづける');keep.id='keep';keep.onclick=()=>v.remove();
   const stop=el('button','pbtn sub','やめる');stop.id='stop';stop.onclick=()=>{v.remove();try{speechSynthesis.cancel();if(curAudio)curAudio.pause()}catch(e){}home()};
