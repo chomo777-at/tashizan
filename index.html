@@ -63,6 +63,18 @@ button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
 .dot.pop{animation:pop .4s ease}
 @keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
 .frames.yay .dot:not(.x){animation:hop .5s ease calc(var(--i,0)*35ms)}
+.frames.replay .dot:not(.x):not(.gone){animation:hop .5s ease calc(var(--i,0)*110ms)}
+.tapme{cursor:pointer;animation:tapme 1s ease-in-out infinite}
+.cell.tapme{border:3px solid #D9A93A}
+.tf.tapme{box-shadow:0 0 0 5px var(--butter2),0 0 0 8px var(--butter)}
+@keyframes tapme{50%{transform:scale(1.07)}}
+.tf.seen{box-shadow:0 0 0 5px #DCEFD8,0 0 0 8px var(--ok)}
+.dot.gone{opacity:0;transform:scale(.3);transition:opacity .3s,transform .3s}
+.answers[hidden]{display:none}
+.prog i.leaf{border:none;background:none;display:grid;place-items:center;font-size:17px;line-height:1}
+.prog i.leaf::after{content:'🍃'}
+.leaves{font-size:clamp(1.6rem,5vmin,2.4rem);letter-spacing:.2em;text-align:center}
+.leaves .no{opacity:.35}
 @keyframes hop{40%{transform:translateY(-22%) scale(1.06)}}
 .tf.mini{--c:16px;border-width:2px;gap:2px;padding:4px}
 .tf.mini .cell{border-width:1px;border-radius:30%}
@@ -422,7 +434,7 @@ function topbar(kind){
     const g=el('button','ibtn small','⚙︎');g.id='parent';g.setAttribute('aria-label','おうちの方へ');g.onclick=parentView;top_.append(g);
   }else if(kind==='q'){
     const h=el('button','ibtn','🏠');h.id='quit';h.setAttribute('aria-label','やめる');h.onclick=confirmQuit;
-    const p=el('div','prog');for(let k=0;k<R.n;k++)p.appendChild(el('i',k<R.i?'d':''));
+    const p=el('div','prog');for(let k=0;k<R.n;k++)p.appendChild(el('i',k<R.i?((R.res&&R.res[k])?'d leaf':'d'):''));
     const s=el('button','ibtn','🔊');s.id='speak';s.setAttribute('aria-label','もういちど きく');s.onclick=replay;
     top_.append(h,p,s);
   }else{
@@ -500,7 +512,7 @@ function home(){
   const rs=S.resume&&S.resume.date===todayStr()&&MODES.some((m,i)=>m.id===S.resume.mode&&isOpen(i))?S.resume:null;
   if(rs){msg='「'+MODE_NAME[rs.mode]+'」の つづきから やる？';mood='normal'}
   const co=coach(mood,msg,false);
-  if(rs){const go=el('button','pbtn','つづきから（'+(rs.i+1)+'もんめ）');go.id='resume';go.onclick=()=>{R={mode:rs.mode,i:rs.i,n:rs.n,first:rs.first,missRun:rs.missRun,okRun:rs.okRun,facts:rs.facts||[],rv:Array.isArray(rs.rv)?rs.rv:null};next()};co.btn=go}
+  if(rs){const go=el('button','pbtn','つづきから（'+(rs.i+1)+'もんめ）');go.id='resume';go.onclick=()=>{R={mode:rs.mode,i:rs.i,n:rs.n,first:rs.first,missRun:rs.missRun,okRun:rs.okRun,facts:rs.facts||[],rv:Array.isArray(rs.rv)?rs.rv:null,res:Array.isArray(rs.res)?rs.res:[]};next()};co.btn=go}
   if(t&&!t.sticker&&!co.btn){const go=el('button','pbtn sun','シールを えらぶ');go.id='go-sticker';go.onclick=stickerPick;co.btn=go}
   const head=el('div','homehead');head.appendChild(co);if(co.btn){const r=el('div','row');r.appendChild(co.btn);head.appendChild(r)}
   wrap.append(head,left,right);card.appendChild(wrap);
@@ -520,7 +532,7 @@ function qMiss(){if(Q&&Q.st.length)Q.st[Q.st.length-1]++}
 function qRecord(miss,fact,level){
   if(!Q)return;
   S.log=Array.isArray(S.log)?S.log:[];
-  const rec={d:todayStr(),m:qm(),e:String(fact),lv:level,st:Q.st.slice(),h:Q.st.some(x=>x>0),mem:!!Q.mem,ok1:miss===0};if(isRv())rec.rv=true;
+  const rec={d:todayStr(),m:qm(),e:String(fact),lv:level,st:Q.st.slice(),h:Q.st.some(x=>x>0),mem:!!Q.mem,ok1:miss===0};if(isRv())rec.rv=true;if(Q.fast)rec.fast=Q.fast;if(Q.tt)rec.tt=true;
   S.log.push(rec);
   Q=null;
 }
@@ -552,6 +564,8 @@ function reviewTable(range){
     const tr=el('tr','');tr.innerHTML=`<td>${m.title}</td><td>${a.length}${nrv?'（'+nrv+'）':''}</td><td>${ok}（${pct(ok,a.length)}）</td><td>${MEM_MODES.includes(m.id)?(hid.length?hidOk+'/'+hid.length:'—'):'—'}</td>`;tb.appendChild(tr);
   });
   box.appendChild(tb);
+  {const hm=qs.filter(q=>q.h);const fq=hm.filter(q=>(q.fast||0)>0).length;
+   box.appendChild(el('p','note',`間違えた問題 ${hm.length}問のうち、答え直しを すぐ（1.5秒以内に）押した問題：${fq}問${hm.length?'（'+pct(fq,hm.length)+'）':''}。少ないほど、考えてから答えています。`))}
   MEM_MODES.forEach(id=>{
     const a=qs.filter(q=>q.m===id&&(q.st||[]).length===3);if(!a.length)return;
     const t2=el('table','ptable');t2.innerHTML=`<tr><th colspan="2">${MODE_NAME[id]}：ステップ別に 間違いがあった問題の数（全${a.length}問中）</th></tr>`;
@@ -602,7 +616,7 @@ function reviewPlan(mode,n){
   const sh=prev.slice().sort(()=>Math.random()-.5);
   rv[0]=sh[0];rv[n-1]=sh.length>1?sh[1]:sh[0];return rv;
 }
-function start(mode){R={mode,i:0,n:5,first:0,missRun:0,okRun:0,facts:[]};R.rv=reviewPlan(mode,R.n);S.resume=null;next()}
+function start(mode){R={mode,i:0,n:5,first:0,missRun:0,okRun:0,facts:[],res:[]};R.rv=reviewPlan(mode,R.n);S.resume=null;next()}
 function easyQ(){return R.i===0||R.i===R.n-1}
 function isRv(){return !!(R.rv&&R.rv[R.i])}
 function qm(){return isRv()?R.rv[R.i]:R.mode}   // この問題の種類
@@ -610,6 +624,7 @@ function lvl(){return easyQ()?(isRv()?1:0):S.level[R.mode]}
 const MEM_MODES=['make','borrow'];
 function done(miss,fact){
   qRecord(miss,fact,lvl());
+  R.res=Array.isArray(R.res)?R.res:[];R.res[R.i]=miss===0;
   if(miss===0){R.first++;R.facts.push(fact);R.okRun++;R.missRun=0}
   else{R.missRun++;R.okRun=0}
   if(!easyQ()){
@@ -641,7 +656,7 @@ function stepTo(i){
 }
 function next(){
   if(R.i>=R.n)return finish();
-  S.resume={mode:R.mode,i:R.i,n:R.n,first:R.first,missRun:R.missRun,okRun:R.okRun,facts:R.facts,rv:R.rv||null,date:todayStr()};save();
+  S.resume={mode:R.mode,i:R.i,n:R.n,first:R.first,missRun:R.missRun,okRun:R.okRun,facts:R.facts,rv:R.rv||null,res:R.res||[],date:todayStr()};save();
   R.steps={make:3,borrow:3}[qm()]||1;qStart();
   topbar('q');card.innerHTML='';
   QS=el('div','qs');const main=el('div','qmain');
@@ -692,36 +707,75 @@ function slotNow(tk,i){tk.slots.forEach((s,k)=>s.classList.toggle('now',k===i))}
 function slotSet(tk,i,v){const s=tk.slots[i];s.textContent=v;s.classList.remove('now','mem','later');s.classList.add('filled')}
 function setAns(e,v){const t=e.tk[e.tk.length-1];t.el.querySelector('.v').textContent=v;t.el.classList.add('answered')}
 // ask: praise names the strategy, not the child
+/* 考えてから答える しくみ（2026-11）:
+   ・1回目に間違えたら、答えのボタンを一度ひっこめ、ヒントの丸を「タッチして」たしかめてから答え直す（当てずっぽうの連打を防ぐ）.
+     きいろの へや → タッチで うめる ／ ×の まる → タッチで とる ／ それ以外 → まるの わくを タッチして よく みる.
+   ・間違えた後に正解したら、答え合わせの動きを見せてから「つぎへ」を出す（1回で正解なら すぐ出す）.
+   ・「つぎへ」は ヒントの下に出す（視線が ヒントを通るように）.
+   ・記録：間違えた後、ボタンが出てから1.5秒以内に押した回数（fast）、タッチで たしかめたか（tt）. */
+const FAST_MS=1500, CHECK_MS=1800;
+function touchTask(m,onDone){
+  const root=HP.never?ST:HP;
+  let kind='look',tg=[...root.querySelectorAll('.cell.hint')];
+  if(tg.length)kind='fill';
+  else{tg=[...root.querySelectorAll('.dot.x')].map(d=>d.parentNode);if(tg.length)kind='take';else tg=[...root.querySelectorAll('.tf')]}
+  if(!tg.length)return false;
+  const say={fill:'きいろの へやを タッチして うめよう',take:'×の まるを タッチして とろう',look:'まるを タッチして よく みよう'}[kind];
+  let left=tg.length;
+  tg.forEach(t=>{t.classList.add('tapme');t.onclick=()=>{
+    if(!t.classList.contains('tapme'))return;t.classList.remove('tapme');t.onclick=null;
+    if(kind==='fill'){t.classList.remove('hint');t.innerHTML='<div class="dot b pop"></div>'}
+    else if(kind==='take'){const d=t.querySelector('.dot');d&&d.classList.add('gone')}
+    else t.classList.add('seen');
+    if(--left===0){Q&&(Q.tt=true);setTimeout(()=>{if(document.body.contains(root))onDone()},350)}
+  }});
+  CO.set('think',say);
+  return true;
+}
 function ask(ans,lo,hi,praise,onOk,{hint,reveal}={}){
-  let miss=0;qStep();
+  let miss=0,armedAt=0,box=null;qStep();
+  document.querySelectorAll('#next').forEach(n=>n.remove());   // 前のステップの「つぎへ」（ヒントの中）を残さない
+  const arm=()=>{armedAt=Date.now()};
+  const showNext=wait=>{
+    const nx=el('button','pbtn nextbtn','つぎへ ▶');nx.type='button';nx.id='next';
+    nx.onclick=()=>{nx.disabled=true;onOk(miss)};
+    const place=()=>{if(!document.body.contains(AR))return;(!HP.never&&!HP.hidden?HP:AR).appendChild(nx)};
+    if(!wait)return place();
+    const fr=HP.never?ST.querySelector('.frames'):HP.frames();
+    if(fr){fr.classList.remove('yay','replay');void fr.offsetWidth;fr.classList.add('replay')}
+    setTimeout(place,CHECK_MS);
+  };
   const render=()=>{
-    AR.innerHTML='';const box=el('div','answers');
+    AR.innerHTML='';box=el('div','answers');
     choices(ans,lo,hi).forEach((v,k)=>{
       const b=el('button','abtn',v);b.type='button';b.id='ans-'+k;
       b.onclick=()=>{
+        if(miss>0&&armedAt&&Date.now()-armedAt<FAST_MS&&Q)Q.fast=(Q.fast||0)+1;
         if(v===ans){
           sfx('ok');
           b.classList.add('ok');box.querySelectorAll('button').forEach(x=>x.disabled=true);
           if(reveal)reveal();
           HP.open();
-          const fr=HP.frames();if(fr){fr.classList.remove('yay');void fr.offsetWidth;fr.classList.add('yay')}
+          if(miss===0){const fr=HP.frames();if(fr){fr.classList.remove('yay');void fr.offsetWidth;fr.classList.add('yay')}}
           CO.set(miss===0?'cheer':'happy',miss===0?praise:'みなおして わかったね！','good');
-          const nx=el('button','pbtn nextbtn','つぎへ ▶');nx.type='button';nx.id='next';
-          nx.onclick=()=>{nx.disabled=true;onOk(miss)};
-          AR.appendChild(nx);
+          showNext(miss>0);
         }else{
           sfx('no');miss++;qMiss();
           b.disabled=true;b.classList.add('wrong');b.classList.remove('no');void b.offsetWidth;b.classList.add('no');
           const m={textContent:'おしい！ ヒントを みてね'};
           if(hint)hint(m);
           HP.open();
+          if(miss===1){
+            const keep=box;let busy=true;
+            if(touchTask(m,()=>{busy=false;CO.set('think',m.textContent);keep.hidden=false;if(!AR.contains(keep)){AR.innerHTML='';AR.appendChild(keep)}arm()})){setTimeout(()=>{if(busy)keep.hidden=true},450);return}
+          }
           if(miss>=2){m.textContent='もう いちど かんがえよう';setTimeout(()=>{if(document.body.contains(box))render()},700)}
-          CO.set('think',m.textContent);
+          CO.set('think',m.textContent);arm();
         }
       };
       box.appendChild(b);
     });
-    AR.appendChild(box);
+    AR.appendChild(box);if(miss>0)arm();
   };
   render();
 }
@@ -918,6 +972,7 @@ function finish(){
   const f=[...new Set(R.facts)].slice(0,4);
   let line='5もん さいごまで できたね！';
   {const h=coach('cheer',line);h.classList.add('hero');c.appendChild(h)}
+  {const lv=el('div','leaves');lv.id='leaves';for(let k=0;k<R.n;k++)lv.appendChild(el('span',(R.res&&R.res[k])?'':'no',(R.res&&R.res[k])?'🍃':'○'));c.appendChild(lv)}
   if(R.first>=CLEAR_AT)c.appendChild(el('div','clear','⭐ クリア！ ひとりで '+R.first+'もん'));
   if(opened.length)c.appendChild(el('div','banner','🔓 あたらしい もんだいが ひらいたよ！「'+opened[0].title+'」'));
   const row=el('div','row');
@@ -994,6 +1049,7 @@ function parentView(){
   topbar('おうちの方へ');card.innerHTML='';
   const p=el('div','parent sketch');p.style.padding='18px 20px';
   p.innerHTML=`<h2>使い方</h2><ul>
+  <li>間違えると、答えのボタンが一度消え、ヒントの丸をタッチして確かめてから答え直します（当てずっぽう防止）。1回で正解した問題は、上の丸が葉っぱ🍃になります。</li>
   <li>1回5問・2〜3分。正解したら「つぎへ」ボタンで次に進みます。終わると毎日1枚、点数に関係なくシールを選んで貼れます（1日1枚まで）。</li>
   <li>1問目と5問目は、前に開いた問題の「ふくしゅう」（やさしい難しさ）です。最初の問題だけは、かんたんな問題になります。間違いが続くと自動でやさしくなります。</li>
   <li>6つの問題は、1つ前の問題を別々の日に2回「クリア」（5問中4問以上をひとりで正解）すると順に開きます。なかなか開かないときは、下の「問題を開く」でおうちの方が開けます。</li>
