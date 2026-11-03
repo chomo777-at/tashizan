@@ -71,9 +71,14 @@ button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
 .tf.seen{box-shadow:0 0 0 5px #DCEFD8,0 0 0 8px var(--ok)}
 .dot.gone{opacity:0;transform:scale(.3);transition:opacity .3s,transform .3s}
 .answers[hidden]{display:none}
-.prog i.leaf{border:none;background:none;display:grid;place-items:center;font-size:17px;line-height:1}
-.prog i.leaf::after{content:'🍃'}
-.leaves{font-size:clamp(1.6rem,5vmin,2.4rem);letter-spacing:.2em;text-align:center}
+.prog{gap:clamp(4px,1vw,8px)}
+.prog i{width:clamp(14px,3.3vw,26px);height:clamp(14px,3.3vw,26px);box-sizing:border-box}
+:root{--leafimg:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Cpath%20d%3D%22M5%2035C4%2017%2017%205%2036%204C36%2023%2024%2035%205%2035Z%22%20fill%3D%22%2378AE57%22%20stroke%3D%22%233E3128%22%20stroke-width%3D%222.6%22%20stroke-linejoin%3D%22round%22/%3E%3Cpath%20d%3D%22M8%2032C15%2025%2023%2017%2031%209%22%20fill%3D%22none%22%20stroke%3D%22%233E3128%22%20stroke-width%3D%222.2%22%20stroke-linecap%3D%22round%22/%3E%3Cpath%20d%3D%22M14%2026l-2-7M20%2020l-1-7M25%2015l6%201M18%2022l7%201%22%20fill%3D%22none%22%20stroke%3D%22%233E3128%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E")}
+.prog i.leaf{border:none;background:var(--leafimg) center/112% no-repeat;transform:scale(1.15)}
+.leafpop{position:fixed;z-index:20;width:clamp(70px,14vmin,130px);height:clamp(70px,14vmin,130px);background:var(--leafimg) center/contain no-repeat;pointer-events:none}
+.leaves .lf{display:inline-block;width:1em;height:1em;vertical-align:-.12em;background:var(--leafimg) center/contain no-repeat}
+.leafcount{font-family:var(--hand);font-size:clamp(1.3rem,4.4vmin,2rem);color:var(--ok);text-align:center}
+.leaves{font-size:clamp(1.8rem,6vmin,3rem);letter-spacing:.12em;text-align:center;line-height:1.3}
 .leaves .no{opacity:.35}
 @keyframes hop{40%{transform:translateY(-22%) scale(1.06)}}
 .tf.mini{--c:16px;border-width:2px;gap:2px;padding:4px}
@@ -298,8 +303,12 @@ const MODES=[
   {id:'borrow',title:'10から ひく ひきざん', icon:[[6,'r'],[4,'x']]},
 ];
 const MODE_NAME=Object.fromEntries(MODES.map(m=>[m.id,m.title]));
-const NEED_DAYS=2, CLEAR_AT=4;
-function clearDays(id){return new Set(S.days.filter(d=>d.rounds&&d.rounds.some(r=>r.mode===id&&r.first>=CLEAR_AT)).map(d=>d.date)).size}
+// クリア＝ひとりで正解が8割以上（5問なら4問、10問なら8問）. 1回の問題数は ⚙︎ で 10問（標準）／5問
+const NEED_DAYS=2, CLEAR_RATE=0.8;
+function qn(){return S.qn===5?5:10}
+function clearNeed(n){return Math.ceil(CLEAR_RATE*(n||5)-1e-9)}
+function isClear(r){return r.first>=clearNeed(r.n)}
+function clearDays(id){return new Set(S.days.filter(d=>d.rounds&&d.rounds.some(r=>r.mode===id&&isClear(r))).map(d=>d.date)).size}
 // P1-②: おうちの方が ⚙︎ で開いた問題（S.manualOpen）も開く. 永久に進めない状態を作らないため
 function isOpen(i){return i===0||S.allOpen||clearDays(MODES[i-1].id)>=NEED_DAYS||(Array.isArray(S.manualOpen)&&S.manualOpen.includes(MODES[i].id))}
 function openSet(){return MODES.filter((m,i)=>isOpen(i)).map(m=>m.id)}
@@ -364,9 +373,9 @@ function sfx(kind){
   if(S.sfx===false)return;
   try{
     AC=AC||new (window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume();
-    const t=AC.currentTime;const notes=kind==='ok'?[[784,0],[1047,.1]]:[[330,0],[262,.12]];
-    notes.forEach(([f,d])=>{const o=AC.createOscillator(),g=AC.createGain();o.type=kind==='ok'?'triangle':'sine';o.frequency.value=f;
-      g.gain.setValueAtTime(.0001,t+d);g.gain.exponentialRampToValueAtTime(kind==='ok'?.2:.12,t+d+.02);g.gain.exponentialRampToValueAtTime(.0001,t+d+.28);
+    const t=AC.currentTime;const notes=kind==='leaf'?[[1047,0],[1319,.08],[1568,.16]]:kind==='ok'?[[784,0],[1047,.1]]:[[330,0],[262,.12]];
+    notes.forEach(([f,d])=>{const o=AC.createOscillator(),g=AC.createGain();o.type=kind==='no'?'sine':'triangle';o.frequency.value=f;
+      g.gain.setValueAtTime(.0001,t+d);g.gain.exponentialRampToValueAtTime(kind==='no'?.12:.2,t+d+.02);g.gain.exponentialRampToValueAtTime(.0001,t+d+.28);
       o.connect(g);g.connect(AC.destination);o.start(t+d);o.stop(t+d+.32)});
   }catch(e){}
 }
@@ -608,7 +617,7 @@ try{compactLog()}catch(e){}
    after a correct answer as 答え合わせ. A wrong choice is disabled; after 2 misses the choices are re-rolled
    so the last remaining button can't be "found" by elimination. Any miss = not 「ひとりで」. */
 let R=null, ST=null, AR=null, CO=null, HP=null, SD=null, QS=null;
-/* P1-③: 1問目と5問目（易しい枠）に、前に開いた問題を「やさしい」で出す（5問のまま）.
+/* P1-③: 最初と最後の問題（易しい枠）に、前に開いた問題を「やさしい」で出す（問題数は変えない）.
    復習の問題では難しさ・おぼえて計算の段階は変えない. 最初の問題（ぱっと見）には前がないので、今までどおり易しい問題. */
 function reviewPlan(mode,n){
   const idx=MODES.findIndex(m=>m.id===mode);const prev=MODES.slice(0,Math.max(0,idx)).map(m=>m.id);
@@ -616,7 +625,7 @@ function reviewPlan(mode,n){
   const sh=prev.slice().sort(()=>Math.random()-.5);
   rv[0]=sh[0];rv[n-1]=sh.length>1?sh[1]:sh[0];return rv;
 }
-function start(mode){R={mode,i:0,n:5,first:0,missRun:0,okRun:0,facts:[],res:[]};R.rv=reviewPlan(mode,R.n);S.resume=null;next()}
+function start(mode){R={mode,i:0,n:qn(),first:0,missRun:0,okRun:0,facts:[],res:[]};R.rv=reviewPlan(mode,R.n);S.resume=null;next()}
 function easyQ(){return R.i===0||R.i===R.n-1}
 function isRv(){return !!(R.rv&&R.rv[R.i])}
 function qm(){return isRv()?R.rv[R.i]:R.mode}   // この問題の種類
@@ -636,7 +645,27 @@ function done(miss,fact){
       S.memStreak[R.mode]=(S.level[R.mode]>=3&&miss===0)?(S.memStreak[R.mode]||0)+1:0;
     }
   }
-  R.i++;save();next();
+  const got=miss===0,at=R.i;
+  R.i++;save();
+  if(got&&leafFly(at,next))return;
+  next();
+}
+/* 1回で正解したら、大きな葉っぱが出て 上の丸へ飛んでいく（0.9秒）. 動きを止める設定（reduce motion）では出さない */
+function leafFly(idx,then){
+  try{
+    if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)return false;
+    const dots=top_.querySelectorAll('.prog i');const tg=dots[idx];if(!tg||!document.body.animate)return false;
+    const src=(document.querySelector('#next')||document.querySelector('.abtn.ok')||card).getBoundingClientRect();
+    const t=tg.getBoundingClientRect();
+    const lf=el('div','leafpop','');document.body.appendChild(lf);
+    const x0=src.left+src.width/2,y0=src.top-10,x1=t.left+t.width/2,y1=t.top+t.height/2;
+    lf.style.left=x0+'px';lf.style.top=y0+'px';sfx('leaf');
+    const a=lf.animate([{transform:'translate(-50%,-50%) scale(.3)',opacity:0},{transform:'translate(-50%,-50%) scale(1.6) rotate(-12deg)',opacity:1,offset:.35},
+      {transform:`translate(calc(-50% + ${x1-x0}px),calc(-50% + ${y1-y0}px)) scale(.55) rotate(20deg)`,opacity:1}],{duration:900,easing:'ease-in-out'});
+    const r0=R,qs0=QS;   // 飛んでいる間に やめた・別の問題を始めたときは 次へ進めない
+    let fin=false;const end=()=>{if(fin)return;fin=true;lf.remove();if(R===r0&&document.body.contains(qs0))then()};a.onfinish=end;setTimeout(end,1200);
+    return true;
+  }catch(e){return false}
 }
 function hintPanel(){
   const p=el('section','hint');p.setAttribute('aria-label','ヒント');p.hidden=true;
@@ -970,10 +999,11 @@ function finish(){
   topbar('');card.innerHTML='';
   const c=el('div','center');
   const f=[...new Set(R.facts)].slice(0,4);
-  let line='5もん さいごまで できたね！';
+  let line=R.n+'もん さいごまで できたね！';
   {const h=coach('cheer',line);h.classList.add('hero');c.appendChild(h)}
-  {const lv=el('div','leaves');lv.id='leaves';for(let k=0;k<R.n;k++)lv.appendChild(el('span',(R.res&&R.res[k])?'':'no',(R.res&&R.res[k])?'🍃':'○'));c.appendChild(lv)}
-  if(R.first>=CLEAR_AT)c.appendChild(el('div','clear','⭐ クリア！ ひとりで '+R.first+'もん'));
+  {const nl=(R.res||[]).filter(Boolean).length;const lv=el('div','leaves');lv.id='leaves';for(let k=0;k<R.n;k++)lv.appendChild((R.res&&R.res[k])?el('span','lf',''):el('span','no','○'));c.appendChild(lv);
+   c.appendChild(el('div','leafcount',nl?'はっぱ '+nl+'まい ゲット！':'つぎは はっぱを あつめよう'))}
+  if(isClear(R))c.appendChild(el('div','clear','⭐ クリア！ ひとりで '+R.first+'もん'));
   if(opened.length)c.appendChild(el('div','banner','🔓 あたらしい もんだいが ひらいたよ！「'+opened[0].title+'」'));
   const row=el('div','row');
   if(!t.sticker){
@@ -1049,10 +1079,10 @@ function parentView(){
   topbar('おうちの方へ');card.innerHTML='';
   const p=el('div','parent sketch');p.style.padding='18px 20px';
   p.innerHTML=`<h2>使い方</h2><ul>
-  <li>間違えると、答えのボタンが一度消え、ヒントの丸をタッチして確かめてから答え直します（当てずっぽう防止）。1回で正解した問題は、上の丸が葉っぱ🍃になります。</li>
-  <li>1回5問・2〜3分。正解したら「つぎへ」ボタンで次に進みます。終わると毎日1枚、点数に関係なくシールを選んで貼れます（1日1枚まで）。</li>
-  <li>1問目と5問目は、前に開いた問題の「ふくしゅう」（やさしい難しさ）です。最初の問題だけは、かんたんな問題になります。間違いが続くと自動でやさしくなります。</li>
-  <li>6つの問題は、1つ前の問題を別々の日に2回「クリア」（5問中4問以上をひとりで正解）すると順に開きます。なかなか開かないときは、下の「問題を開く」でおうちの方が開けます。</li>
+  <li>間違えると、答えのボタンが一度消え、ヒントの丸をタッチして確かめてから答え直します（当てずっぽう防止）。1回で正解した問題は、上の丸が葉っぱになります。</li>
+  <li>1回10問・5分ほど（下の設定で5問にもできます）。正解したら「つぎへ」ボタンで次に進みます。終わると毎日1枚、点数に関係なくシールを選んで貼れます（1日1枚まで）。</li>
+  <li>最初と最後の問題は、前に開いた問題の「ふくしゅう」（やさしい難しさ）です。最初の問題だけは、かんたんな問題になります。間違いが続くと自動でやさしくなります。</li>
+  <li>6つの問題は、1つ前の問題を別々の日に2回「クリア」（8割以上をひとりで正解：10問なら8問、5問なら4問）すると順に開きます。なかなか開かないときは、下の「問題を開く」でおうちの方が開けます。</li>
   <li>すごろくの貼ったマスをタップすると、その日にできた問題が見られ、「はなまる」を押せます。</li>
   <li>記録はこの端末のブラウザに保存されます。同じ端末・同じブラウザで使ってください。</li>
   <li>iPadでは「設定 → アクセシビリティ → アクセスガイド」をオンにすると、勉強中にほかのアプリへ移れなくなります。</li></ul>`;
@@ -1068,6 +1098,11 @@ function parentView(){
   const tg2=el('label','toggle');const cb2=el('input');cb2.type='checkbox';cb2.id='sfx';cb2.checked=S.sfx!==false;
   cb2.onchange=()=>{S.sfx=cb2.checked;save();sfx('ok')};
   tg2.append(cb2,document.createTextNode('正解・まちがいの効果音を鳴らす'));p.appendChild(tg2);
+  const qr=el('div','radio','<b>1回の問題数</b>');
+  [[10,'10問（標準・5分ほど）'],[5,'5問（つかれている日や、時間がない日に）']].forEach(([v,t])=>{
+    const lb=el('label','');const r=el('input');r.type='radio';r.name='qn';r.id='qn-'+v;r.value=v;r.checked=qn()===v;
+    r.onchange=()=>{S.qn=v;save()};lb.append(r,document.createTextNode(t));qr.appendChild(lb)});
+  p.appendChild(qr);
   // C3: current difficulty per problem
   const LV=['','やさしい','ふつう','むずかしい'];
   const st=el('div','pstat','<b>いまの難しさ（自動で調整されます）</b>');const tb=el('table','ptable');
